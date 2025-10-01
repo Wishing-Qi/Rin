@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 @layer base {
+    :root {
+      --hero-height: clamp(12rem, 32vh, 22rem);
+    }
+
     .bg-w {
       @apply bg-white dark:bg-dark;
     }
@@ -51,10 +55,10 @@
       /* background-image set inline in JSX so we only control sizing/position here */
       position: absolute;
       inset: 0;
-      background-position: center;
+      background-position: center top;
       background-size: cover;
       background-repeat: no-repeat;
-      transform: scale(1.05);
+      transform: scale(1.02);
       transition: transform 0.7s ease, filter 0.5s ease;
       filter: brightness(0.95);
     }
@@ -63,13 +67,19 @@
       position: absolute;
       inset: 0;
       /* fade to page background at bottom */
-      background: linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(255,255,255,0));
+      background: linear-gradient(to bottom, rgba(0,0,0,0.45), rgba(255,255,255,0));
       pointer-events: none;
     }
 
     /* Dark mode overlay adjustment */
     [data-color-mode="dark"] .hero-overlay,
     .dark .hero-overlay {
-      background: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(16,40,40,0));
+      background: linear-gradient(to bottom, rgba(0,0,0,0.75), rgba(16,40,40,0));
+    }
+
+    .hero-spacer {
+      width: 100%;
+      height: var(--hero-height);
+      min-height: 5rem;
     }
   }
