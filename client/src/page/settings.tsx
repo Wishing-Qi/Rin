@@ -130,7 +130,7 @@ export function Settings() {
                             <h1 className="text-2xl font-bold t-primary">
                                 {t('settings.title')}
                             </h1>
-                            {(clientLoading || serverLoading) && <ReactLoading width="1em" height="1em" type="spin" color="#FC466B" />}
+                            {(clientLoading || serverLoading) && <ReactLoading width="1em" height="1em" type="spin" color="#8dd1d2" />}
                         </div>
                         <div className="flex flex-col items-start space-y-2">
                             <ItemTitle title={t('settings.friend.title')} />
@@ -287,7 +287,7 @@ function ItemSwitch({ title, description, type, configKey }: { title: string, de
                     </p>
                 </div>
                 <div className="flex flex-row items-center justify-center space-x-4">
-                    {loading && <ReactLoading width="1em" height="1em" type="spin" color="#FC466B" />}
+                    {loading && <ReactLoading width="1em" height="1em" type="spin" color="#8dd1d2" />}
                     <Switch.Root className="SwitchRoot" checked={checked} onCheckedChange={() => {
                         updateConfig(type, configKey, !checked);
                     }}>
@@ -352,7 +352,7 @@ function ItemInput({ title, configKeyTitle, description, type, configKey }: { ti
                     </p>
                 </div>
                 <div className="flex flex-row items-center justify-center space-x-4">
-                    {loading && <ReactLoading width="1em" height="1em" type="spin" color="#FC466B" />}
+                    {loading && <ReactLoading width="1em" height="1em" type="spin" color="#8dd1d2" />}
                     <Button title={t('update.title')} onClick={() => {
                         setIsOpen(true);
                     }} />
@@ -486,7 +486,7 @@ function ItemWithUpload({
                             width="1em"
                             height="1em"
                             type="spin"
-                            color="#FC466B"
+                            color="#8dd1d2"
                         />
                     )}
                     <input

@@ -19,6 +19,15 @@ export function Header({ children }: { children?: React.ReactNode }) {
 
     return useMemo(() => (
         <>
+            {/* Hero banner: put before the fixed header so the fixed nav overlays it */}
+            <div className="hero-wrap w-screen">
+                <div
+                    className="hero-banner"
+                    // default to /hero.png in public; you can change by setting process.env.HERO_IMAGE
+                    style={{ backgroundImage: `url(${process.env.HERO_IMAGE || '/hero.png'})` }}
+                />
+                <div className="hero-overlay" />
+            </div>
             <div className="fixed z-40">
                 <div className="w-screen">
                     <Padding className="mx-4 mt-4">
@@ -66,7 +75,8 @@ export function Header({ children }: { children?: React.ReactNode }) {
                     </Padding>
                 </div>
             </div>
-            <div className="h-20"></div>
+            {/* spacer: keep space for the fixed header and the hero banner (larger on md+) */}
+            <div className="h-20 md:h-56"></div>
         </>
     ), [profile, children])
 }

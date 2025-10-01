@@ -41,4 +41,35 @@
     .writeauto {
       @apply w-full md:w-7/12 lg:w-8/12 duration-300;
     }
+
+    /* Hero banner styles */
+    .hero-wrap {
+      @apply relative w-screen h-20 md:h-56 overflow-hidden;
+    }
+
+    .hero-banner {
+      /* background-image set inline in JSX so we only control sizing/position here */
+      position: absolute;
+      inset: 0;
+      background-position: center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      transform: scale(1.05);
+      transition: transform 0.7s ease, filter 0.5s ease;
+      filter: brightness(0.95);
+    }
+
+    .hero-overlay {
+      position: absolute;
+      inset: 0;
+      /* fade to page background at bottom */
+      background: linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(255,255,255,0));
+      pointer-events: none;
+    }
+
+    /* Dark mode overlay adjustment */
+    [data-color-mode="dark"] .hero-overlay,
+    .dark .hero-overlay {
+      background: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(16,40,40,0));
+    }
   }

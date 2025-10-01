@@ -116,7 +116,7 @@ export function MarkdownEditor({ content, setContent, placeholder = "> Write you
         <div className="flex-grow" />
         {uploading &&
           <div className="flex flex-row space-x-2 items-center">
-            <Loading type="spin" color="#FC466B" height={16} width={16} />
+            <Loading type="spin" color="#8dd1d2" height={16} width={16} />
             <span className="text-sm text-neutral-500">{t('uploading')}</span>
           </div>
         }
