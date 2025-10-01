@@ -23,8 +23,8 @@ export function Header({ children }: { children?: React.ReactNode }) {
             <div className="hero-wrap">
                 <div
                     className="hero-banner"
-                    // default to /hero.jpg in public; you can change by setting process.env.HERO_IMAGE
-                    style={{ backgroundImage: `url(${process.env.HERO_IMAGE || '/hero.jpg'})` }}
+                    // default to /hero.png in public; you can change by setting process.env.HERO_IMAGE
+                    style={{ backgroundImage: `url(${process.env.HERO_IMAGE || '/hero.png'})` }}
                 />
                 <div className="hero-overlay" />
             </div>
