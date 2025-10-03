@@ -198,15 +198,19 @@ function RouteMe({ path, children, headerComponent, paddingClassName, requirePer
   return (
     <Route path={path} >
       {params => {
-        return (<>
-          <Header>
-            {headerComponent}
-          </Header>
-          <Padding className={paddingClassName}>
-            {typeof children === 'function' ? children(params) : children}
-          </Padding>
-          <Footer />
-        </>)
+        return (
+          <div className="flex min-h-screen flex-col">
+            <Header>
+              {headerComponent}
+            </Header>
+            <main className="flex-1 w-full flex flex-col">
+              <Padding className={paddingClassName}>
+                {typeof children === 'function' ? children(params) : children}
+              </Padding>
+            </main>
+            <Footer />
+          </div>
+        )
       }}
     </Route>
   )
