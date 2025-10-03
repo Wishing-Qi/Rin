@@ -89,12 +89,13 @@
       /* background-image set inline in JSX so we only control sizing/position here */
       position: absolute;
       inset: 0;
-      background-position: center top;
-      background-size: cover;
+      background-position: top center;
+      background-size: contain;
       background-repeat: no-repeat;
-      transform: scale(1.02);
-      transition: transform 0.7s ease, filter 0.5s ease;
-      filter: brightness(0.95);
+      background-color: var(--hero-surface-bottom);
+      transform: none;
+      transition: filter 0.5s ease;
+      filter: brightness(0.98);
       z-index: 1;
     }
 
@@ -102,7 +103,7 @@
       position: absolute;
       inset: 0;
       /* fade to page background at bottom */
-      background: linear-gradient(to bottom, rgba(0,0,0,0.45), rgba(255,255,255,0));
+      background: linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(255,255,255,0));
       pointer-events: none;
       z-index: 2;
     }
