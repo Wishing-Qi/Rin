@@ -3,7 +3,16 @@
 @tailwind utilities;
 @layer base {
     :root {
-      --hero-height: clamp(12rem, 32vh, 22rem);
+      --hero-height-mobile: 10rem;
+      --hero-height-desktop: 18rem;
+      --hero-surface-top: rgba(141, 209, 210, 0.3);
+      --hero-surface-bottom: rgba(244, 253, 253, 0);
+    }
+
+    [data-color-mode="dark"],
+    .dark {
+      --hero-surface-top: rgba(16, 40, 40, 0.55);
+      --hero-surface-bottom: rgba(16, 40, 40, 0);
     }
 
     .bg-w {
@@ -48,7 +57,32 @@
 
     /* Hero banner styles */
     .hero-wrap {
-      @apply relative w-screen h-20 md:h-56 overflow-hidden;
+      position: relative;
+      width: 100%;
+      height: var(--hero-height-mobile);
+      margin-bottom: calc(-1 * var(--hero-height-mobile));
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @media (min-width: 768px) {
+      .hero-wrap {
+        height: var(--hero-height-desktop);
+        margin-bottom: calc(-1 * var(--hero-height-desktop));
+      }
+    }
+
+    .hero-wrap::before {
+       content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        var(--hero-surface-top),
+        var(--hero-surface-bottom)
+      );
+      z-index: 0;
     }
 
     .hero-banner {
@@ -61,6 +95,7 @@
       transform: scale(1.02);
       transition: transform 0.7s ease, filter 0.5s ease;
       filter: brightness(0.95);
+      z-index: 1;
     }
 
     .hero-overlay {
@@ -69,6 +104,7 @@
       /* fade to page background at bottom */
       background: linear-gradient(to bottom, rgba(0,0,0,0.45), rgba(255,255,255,0));
       pointer-events: none;
+      z-index: 2;
     }
 
     /* Dark mode overlay adjustment */
@@ -77,9 +113,5 @@
       background: linear-gradient(to bottom, rgba(0,0,0,0.75), rgba(16,40,40,0));
     }
 
-    .hero-spacer {
-      width: 100%;
-      height: var(--hero-height);
-      min-height: 5rem;
-    }
+    /* hero-spacer removed; header now uses fixed height offset */
   }

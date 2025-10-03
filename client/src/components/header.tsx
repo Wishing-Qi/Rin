@@ -75,8 +75,8 @@ export function Header({ children }: { children?: React.ReactNode }) {
                     </Padding>
                 </div>
             </div>
-            {/* spacer: reserve space equal to hero height so content starts below the banner */}
-            <div className="hero-spacer" aria-hidden="true"></div>
+            {/* spacer: match the header height so content clears the fixed bar */}
+            <div className="h-20" aria-hidden="true"></div>
         </>
     ), [profile, children])
 }
