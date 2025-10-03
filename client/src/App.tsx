@@ -203,7 +203,7 @@ function RouteMe({ path, children, headerComponent, paddingClassName, requirePer
             <Header>
               {headerComponent}
             </Header>
-            <main className="flex-1 w-full flex flex-col">
+            <main className="relative z-10 flex-1 w-full flex flex-col">
               <Padding className={paddingClassName}>
                 {typeof children === 'function' ? children(params) : children}
               </Padding>

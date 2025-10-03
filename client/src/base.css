@@ -7,12 +7,16 @@
       --hero-height-desktop: 18rem;
       --hero-surface-top: rgba(141, 209, 210, 0.3);
       --hero-surface-bottom: rgba(244, 253, 253, 0);
+      --hero-overlay-top: rgba(0, 0, 0, 0.18);
+      --hero-overlay-bottom: rgba(255, 255, 255, 0);
     }
 
     [data-color-mode="dark"],
     .dark {
       --hero-surface-top: rgba(16, 40, 40, 0.55);
       --hero-surface-bottom: rgba(16, 40, 40, 0);
+      --hero-overlay-top: rgba(0, 0, 0, 0.75);
+      --hero-overlay-bottom: rgba(16, 40, 40, 0);
     }
 
     .bg-w {
@@ -48,28 +52,28 @@
     }
   
     .wauto {
-      @apply w-full md:w-11/12 lg:w-10/12 xl:w-8/12 2xl:w-6/12 duration-300;
+      @apply w-full md:w-11/12 lg:w-10/12 xl:w-8/12 2xl:w-6/12 mx-auto duration-300;
     }
   
     .writeauto {
-      @apply w-full md:w-7/12 lg:w-8/12 duration-300;
+      @apply w-full md:w-7/12 lg:w-8/12 mx-auto duration-300;
     }
 
     /* Hero banner styles */
     .hero-wrap {
-      position: relative;
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100%;
       height: var(--hero-height-mobile);
-      margin-bottom: calc(-1 * var(--hero-height-mobile));
       overflow: hidden;
       pointer-events: none;
-      z-index: 0;
+      z-index: 1;
     }
 
     @media (min-width: 768px) {
       .hero-wrap {
         height: var(--hero-height-desktop);
-        margin-bottom: calc(-1 * var(--hero-height-desktop));
       }
     }
 
@@ -103,7 +107,7 @@
       position: absolute;
       inset: 0;
       /* fade to page background at bottom */
-      background: linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(255,255,255,0));
+      background: linear-gradient(to bottom, var(--hero-overlay-top), var(--hero-overlay-bottom));
       pointer-events: none;
       z-index: 2;
     }
