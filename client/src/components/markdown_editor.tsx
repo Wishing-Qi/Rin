@@ -165,7 +165,9 @@ export function MarkdownEditor({ content, setContent, placeholder = "> Write you
                 fontSize: 14,
                 lineNumbers: "off",
                 dragAndDrop: true,
-                pasteAs: { enabled: false }
+                pasteAs: { enabled: false },
+                acceptSuggestionOnEnter: "off",
+                "unicodeHighlight.ambiguousCharacters": false
               }}
             />
           </div>
