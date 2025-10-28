@@ -167,7 +167,9 @@ export function MarkdownEditor({ content, setContent, placeholder = "> Write you
                 dragAndDrop: true,
                 pasteAs: { enabled: false },
                 acceptSuggestionOnEnter: "off",
-                "unicodeHighlight.ambiguousCharacters": false
+                unicodeHighlight: {
+                  ambiguousCharacters: false,
+                }
               }}
             />
           </div>
