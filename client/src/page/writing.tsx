@@ -225,7 +225,7 @@ export function WritingPage({ id }: { id?: number }) {
           mainBorderColor: '#4a9192',
           edgeLabelColor: '#e0e0e0',
           textColor: '#0d1f1f',
-        }
+        },
       });
       mermaid.run({
         suppressErrors: true,
@@ -244,7 +244,7 @@ export function WritingPage({ id }: { id?: number }) {
             mainBorderColor: '#5ba9aa',
             edgeLabelColor: '#e0e0e0',
             textColor: '#e0e0e0',
-          }
+          },
         });
         mermaid.run({
           suppressErrors: true,
