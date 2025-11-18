@@ -215,6 +215,17 @@ export function WritingPage({ id }: { id?: number }) {
       mermaid.initialize({
         startOnLoad: false,
         theme: "default",
+        themeVariables: {
+          bg: '#f0fafa',
+          clusterBkg: '#7cbebf',
+          clusterBorder: '#4a9192',
+          clusterTextColor: '#0d1f1f',
+          mainBkg: '#f0fafa',
+          primaryColor: '#7cbebf',
+          mainBorderColor: '#4a9192',
+          edgeLabelColor: '#e0e0e0',
+          textColor: '#0d1f1f',
+        }
       });
       mermaid.run({
         suppressErrors: true,
@@ -223,6 +234,17 @@ export function WritingPage({ id }: { id?: number }) {
         mermaid.initialize({
           startOnLoad: false,
           theme: "dark",
+          themeVariables: {
+            bg: '#1c1c1e',
+            clusterBkg: '#8dd1d2',
+            clusterBorder: '#5ba9aa',
+            clusterTextColor: '#e0e0e0',
+            mainBkg: '#1c1c1e',
+            primaryColor: '#8dd1d2',
+            mainBorderColor: '#5ba9aa',
+            edgeLabelColor: '#e0e0e0',
+            textColor: '#e0e0e0',
+          }
         });
         mermaid.run({
           suppressErrors: true,
