@@ -1,22 +1,21 @@
 import i18n from 'i18next';
-import { client } from "../main";
-import { headersWithAuth } from "../utils/auth";
-import { Cache } from "../utils/cache";
-import { siteName } from "../utils/constants";
-import { ShowAlertType, useAlert } from "../hooks/useLoginModal";
-import { Checkbox } from "primereact/checkbox";
-import { Calendar } from 'primereact/calendar';
-import _ from "lodash";
-import { useColorMode } from "../utils/darkModeUtils";
-import mermaid from "mermaid";
-import React, { useCallback, useEffect, useState } from "react";
-import { useLocation } from "wouter";
-
-import {MarkdownEditor} from '../components/markdown_editor';
-import Loading from 'react-loading';
+import _ from 'lodash';
+import {Calendar} from 'primereact/calendar';
+import 'primereact/resources/primereact.css';
+import 'primereact/resources/themes/lara-light-indigo/theme.css';
+import {useCallback, useEffect, useState} from "react";
 import {Helmet} from "react-helmet";
 import {useTranslation} from "react-i18next";
-import { Input } from "../components/input";
+import Loading from 'react-loading';
+import {ShowAlertType, useAlert} from '../components/dialog';
+import {Checkbox, Input} from "../components/input";
+import {client} from "../main";
+import {headersWithAuth} from "../utils/auth";
+import {Cache} from '../utils/cache';
+import {siteName} from "../utils/constants";
+import mermaid from 'mermaid';
+import { MarkdownEditor } from '../components/markdown_editor';
+import { useColorMode } from "../utils/darkModeUtils";
 
 // 将主题配置提取出来，方便管理
 const mermaidLightTheme = {
