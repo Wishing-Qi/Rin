@@ -1,20 +1,53 @@
 import i18n from 'i18next';
-import _ from 'lodash';
-import {Calendar} from 'primereact/calendar';
-import 'primereact/resources/primereact.css';
-import 'primereact/resources/themes/lara-light-indigo/theme.css';
-import {useCallback, useEffect, useState} from "react";
+import { client } from "../main";
+import { headersWithAuth } from "../utils/auth";
+import { Cache } from "../utils/cache";
+import { siteName } from "../utils/constants";
+import { ShowAlertType, useAlert } from "../hooks/useLoginModal";
+import { Checkbox } from "primereact/checkbox";
+import { Calendar } from 'primereact/calendar';
+import _ from "lodash";
+import { useColorMode } from "../utils/darkModeUtils";
+import mermaid from "mermaid";
+import React, { useCallback, useEffect, useState } from "react";
+import { useLocation } from "wouter";
+
+import {MarkdownEditor} from '../components/markdown_editor';
+import Loading from 'react-loading';
 import {Helmet} from "react-helmet";
 import {useTranslation} from "react-i18next";
-import Loading from 'react-loading';
-import {ShowAlertType, useAlert} from '../components/dialog';
-import {Checkbox, Input} from "../components/input";
-import {client} from "../main";
-import {headersWithAuth} from "../utils/auth";
-import {Cache} from '../utils/cache';
-import {siteName} from "../utils/constants";
-import mermaid from 'mermaid';
-import { MarkdownEditor } from '../components/markdown_editor';
+import { Input } from "../components/input";
+
+// 将主题配置提取出来，方便管理
+const mermaidLightTheme = {
+  theme: "default",
+  themeVariables: {
+    bg: '#f0fafa',
+    clusterBkg: '#7cbebf',
+    clusterBorder: '#4a9192',
+    clusterTextColor: '#0d1f1f',
+    mainBkg: '#f0fafa',
+    primaryColor: '#7cbebf',
+    mainBorderColor: '#4a9192',
+    edgeLabelColor: '#0d1f1f', // 在亮色背景下，暗色文字更清晰
+    textColor: '#0d1f1f',
+  },
+};
+
+const mermaidDarkTheme = {
+  theme: "dark",
+  themeVariables: {
+    bg: '#1c1c1e',
+    clusterBkg: '#8dd1d2',
+    clusterBorder: '#5ba9aa',
+    clusterTextColor: '#e0e0e0',
+    mainBkg: '#1c1c1e',
+    primaryColor: '#8dd1d2',
+    mainBorderColor: '#5ba9aa',
+    edgeLabelColor: '#e0e0e0',
+    textColor: '#e0e0e0',
+  },
+};
 
 async function publish({
   title,
@@ -126,6 +159,7 @@ async function update({
 // 写作页面
 export function WritingPage({ id }: { id?: number }) {
   const { t } = useTranslation();
+  const colorMode = useColorMode(); // 引入颜色模式
   const cache = Cache.with(id);
   const [title, setTitle] = cache.useCache("title", "");
   const [summary, setSummary] = cache.useCache("summary", "");
@@ -210,53 +244,36 @@ export function WritingPage({ id }: { id?: number }) {
         });
     }
   }, []);
+
+  // 在组件加载和颜色模式切换时，初始化一次 Mermaid
+  useEffect(() => {
+    mermaid.initialize({
+      startOnLoad: false,
+      ...(colorMode === 'dark' ? mermaidDarkTheme : mermaidLightTheme)
+    });
+    // 初始化后立即渲染一次，确保初始内容正确显示
+    mermaid.run({ suppressErrors: true });
+  }, [colorMode]);
+
   const debouncedUpdate = useCallback(
     _.debounce(() => {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: "default",
-        themeVariables: {
-          bg: '#f0fafa',
-          clusterBkg: '#7cbebf',
-          clusterBorder: '#4a9192',
-          clusterTextColor: '#0d1f1f',
-          mainBkg: '#f0fafa',
-          primaryColor: '#7cbebf',
-          mainBorderColor: '#4a9192',
-          edgeLabelColor: '#e0e0e0',
-          textColor: '#0d1f1f',
-        },
-      });
-      mermaid.run({
-        suppressErrors: true,
-        nodes: document.querySelectorAll("pre.mermaid_default")
-      }).then(()=>{
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: "dark",
-          themeVariables: {
-            bg: '#1c1c1e',
-            clusterBkg: '#8dd1d2',
-            clusterBorder: '#5ba9aa',
-            clusterTextColor: '#e0e0e0',
-            mainBkg: '#1c1c1e',
-            primaryColor: '#8dd1d2',
-            mainBorderColor: '#5ba9aa',
-            edgeLabelColor: '#e0e0e0',
-            textColor: '#e0e0e0',
-          },
-        });
+      // 只需调用 run 来更新图表，无需重新初始化
+      // 仅在预览模式下更新，避免编辑时频繁刷新导致闪烁
+      const previewElement = document.querySelector('.wmde-markdown');
+      if (previewElement) {
         mermaid.run({
+          nodes: [previewElement as HTMLElement],
           suppressErrors: true,
-          nodes: document.querySelectorAll("pre.mermaid_dark")
         });
-      })
-    }, 100),
+      }
+    }, 1000), // 增加防抖时间，减少刷新频率
     []
   );
+
   useEffect(() => {
     debouncedUpdate();
   }, [content, debouncedUpdate]);
+
   function MetaInput({ className }: { className?: string }) {
     return (
       <>

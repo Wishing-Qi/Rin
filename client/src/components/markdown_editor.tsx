@@ -163,6 +163,7 @@ export function MarkdownEditor({ content, setContent, placeholder = "> Write you
               options={{
                 wordWrap: "on",
                 fontSize: 14,
+                fontFamily: "'Maple Mono NF CN', Consolas, monospace",
                 lineNumbers: "off",
                 dragAndDrop: true,
                 pasteAs: { enabled: false },

@@ -1,21 +1,43 @@
 @import "./base.css";
 
-/* cantarell-latin-400-normal */
+/* Regular (400) */
 @font-face {
-  font-family: "Cantarell";
-  font-style: normal;
-  font-display: auto;
+  font-family: "Maple Mono NF CN";
+  src: url("https://s.wishingqi.top/fonts/MapleMono-NF-CN-Regular/result.css");
   font-weight: 400;
-  src: url(/cantarell_5.0.12_latin-400-normal.woff2) format("woff2"),
-    url(/cantarell_5.0.13_latin-400-normal.woff) format("woff");
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
-    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
-    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  font-style: normal;
+  font-display: swap;
 }
 
+/* Bold (700) */
+@font-face {
+  font-family: "Maple Mono NF CN";
+  src: url("https://s.wishingqi.top/fonts/MapleMono-NF-CN-Bold/result.css");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Italic (400) */
+@font-face {
+  font-family: "Maple Mono NF CN";
+  src: url("https://s.wishingqi.top/fonts/MapleMono-NF-CN-Italic/result.css");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Bold Italic (700) */
+@font-face {
+  font-family: "Maple Mono NF CN";
+  src: url("https://s.wishingqi.top/fonts/MapleMono-NF-CN-BoldItalic/result.css");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
 body {
   @apply bg-background-light dark:bg-background-dark text-gray-800;
-  font-family: Cantarell, "Source Han Serif CN VF" !important;
+  font-family: "Maple Mono NF CN", "Source Han Serif CN VF" !important;
 }
 
 textarea:focus {
@@ -24,7 +46,7 @@ textarea:focus {
 
 .wmde-markdown {
   @apply bg-w;
-  font-family: Cantarell, "Source Han Serif CN VF" !important;
+  font-family: "Maple Mono NF CN", "Source Han Serif CN VF" !important;
 }
 
 .w-md-editor {
