@@ -1,73 +1,71 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 
 const parser = new XMLParser({
-    preserveOrder: true,
-    ignoreAttributes: false,
-    trimValues: true
+    ignoreAttributes: true,
+    trimValues: true,
+    parseTagValue: false // 重要：避免将 ID 字符串自动转为数字
 });
 
 const builder = new XMLBuilder({
-    preserveOrder: true,
-    ignoreAttributes: false,
+    ignoreAttributes: true,
     format: true
 });
-
-export type XMLRPCValue = 
-    | { string: [{ "#text": string }] }
-    | { int: [{ "#text": number }] }
-    | { i4: [{ "#text": number }] }
-    | { double: [{ "#text": number }] }
-    | { boolean: [{ "#text": string }] } // "0" or "1"
-    | { dateTime\.iso8601: [{ "#text": string }] }
-    | { base64: [{ "#text": string }] }
-    | { struct: { member: XMLRPCMember[] }[] }
-    | { array: { data: { value: XMLRPCValue[] }[] }[] };
-
-type XMLRPCMember = {
-    name: [{ "#text": string }],
-    value: [XMLRPCValue]
-};
 
 /**
  * 将 XML-RPC 的抽象语法树转换为简单的 JSON 对象
  */
 export function xmlrpcToJSON(xml: string) {
     const obj = parser.parse(xml);
-    const methodCall = obj.find((n: any) => n.methodCall);
-    if (!methodCall) throw new Error("Invalid XML-RPC: missing methodCall");
+    
+    if (!obj.methodCall) throw new Error("Invalid XML-RPC: missing methodCall");
 
-    const methodNameNode = methodCall.methodCall.find((n: any) => n.methodName);
-    const methodName = methodNameNode.methodName[0]["#text"];
-
-    const paramsNode = methodCall.methodCall.find((n: any) => n.params);
-    const params = paramsNode ? paramsNode.params.map((p: any) => {
-        const valueNode = p.param[0].value[0];
-        return parseValue(valueNode);
-    }) : [];
+    const methodName = obj.methodCall.methodName;
+    const paramsWrapper = obj.methodCall.params;
+    
+    let params: any[] = [];
+    if (paramsWrapper && paramsWrapper.param) {
+        const paramArray = Array.isArray(paramsWrapper.param) ? paramsWrapper.param : [paramsWrapper.param];
+        params = paramArray.map((p: any) => parseValue(p.value));
+    }
 
     return { methodName, params };
 }
 
-function parseValue(node: any): any {
-    const type = Object.keys(node)[0];
-    const val = node[type][0]["#text"];
+function parseValue(valueNode: any): any {
+    if (valueNode === undefined || valueNode === null) return "";
+    
+    // 如果 value 节点直接包含文本（有些客户端不带类型标签）
+    if (typeof valueNode !== 'object') return valueNode;
+
+    const type = Object.keys(valueNode)[0];
+    const val = valueNode[type];
 
     switch (type) {
-        case "string": return val || "";
+        case "string": return String(val === undefined ? "" : val);
         case "int":
         case "i4": return parseInt(val);
         case "double": return parseFloat(val);
-        case "boolean": return val === "1";
+        case "boolean": return val === "1" || val === 1 || val === true;
         case "struct":
             const struct: any = {};
-            node.struct[0].member.forEach((m: any) => {
-                const name = m.name[0]["#text"];
-                struct[name] = parseValue(m.value[0]);
-            });
+            if (val && val.member) {
+                const members = Array.isArray(val.member) ? val.member : [val.member];
+                members.forEach((m: any) => {
+                    struct[m.name] = parseValue(m.value);
+                });
+            }
             return struct;
         case "array":
-            return node.array[0].data[0].value.map((v: any) => parseValue(v));
-        default: return val;
+            if (val && val.data && val.data.value) {
+                const values = Array.isArray(val.data.value) ? val.data.value : [val.data.value];
+                return values.map((v: any) => parseValue(v));
+            }
+            return [];
+        case "base64": return val;
+        default: 
+            // 处理没有显式类型标签的情况
+            if (type === undefined) return "";
+            return val;
     }
 }
 
@@ -75,72 +73,61 @@ function parseValue(node: any): any {
  * 将 JSON 对象转换为 XML-RPC 响应格式
  */
 export function jsonToXmlrpcResponse(data: any): string {
-    const value = formatValue(data);
-    const obj = [
-        {
-            methodResponse: [
-                {
-                    params: [
-                        {
-                            param: [
-                                { value: [value] }
-                            ]
-                        }
-                    ]
+    const obj = {
+        methodResponse: {
+            params: {
+                param: {
+                    value: formatValue(data)
                 }
-            ]
+            }
         }
-    ];
+    };
     return `<?xml version="1.0" encoding="UTF-8"?>\n${builder.build(obj)}`;
 }
 
 export function jsonToXmlrpcFault(code: number, message: string): string {
-    const fault = {
-        struct: [
-            {
-                member: [
-                    { name: [{ "#text": "faultCode" }], value: [{ int: [{ "#text": code }] }] },
-                    { name: [{ "#text": "faultString" }], value: [{ string: [{ "#text": message }] }] }
-                ]
+    const obj = {
+        methodResponse: {
+            fault: {
+                value: {
+                    struct: {
+                        member: [
+                            { name: "faultCode", value: { int: code } },
+                            { name: "faultString", value: { string: message } }
+                        ]
+                    }
+                }
             }
-        ]
-    };
-    const obj = [
-        {
-            methodResponse: [
-                { fault: [{ value: [fault] }] }
-            ]
         }
-    ];
+    };
     return `<?xml version="1.0" encoding="UTF-8"?>\n${builder.build(obj)}`;
 }
 
 function formatValue(data: any): any {
-    if (typeof data === "string") return { string: [{ "#text": data }] };
+    if (data === null || data === undefined) return { string: "" };
+    if (typeof data === "string") return { string: data };
     if (typeof data === "number") {
-        if (Number.isInteger(data)) return { int: [{ "#text": data }] };
-        return { double: [{ "#text": data }] };
+        if (Number.isInteger(data)) return { int: data };
+        return { double: data };
     }
-    if (typeof data === "boolean") return { boolean: [{ "#text": data ? "1" : "0" }] };
-    if (data instanceof Date) return { "dateTime.iso8601": [{ "#text": data.toISOString() }] };
+    if (typeof data === "boolean") return { boolean: data ? "1" : "0" };
+    if (data instanceof Date) return { "dateTime.iso8601": data.toISOString() };
     if (Array.isArray(data)) {
         return {
-            array: [
-                {
-                    data: [
-                        { value: data.map(v => formatValue(v)) }
-                    ]
+            array: {
+                data: {
+                    value: data.map(v => formatValue(v))
                 }
-            ]
+            }
         };
     }
-    if (typeof data === "object" && data !== null) {
+    if (typeof data === "object") {
         const members = Object.entries(data).map(([name, val]) => ({
-            member: [
-                { name: [{ "#text": name }], value: [formatValue(val)] }
-            ]
+            name,
+            value: formatValue(val)
         }));
-        return { struct: members };
+        return { struct: { member: members } };
     }
-    return { string: [{ "#text": String(data) }] };
+    return { string: String(data) };
 }
+
