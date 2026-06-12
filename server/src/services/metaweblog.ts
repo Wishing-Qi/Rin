@@ -29,41 +29,70 @@ export function MetaWeblogService() {
             }
         })
         .get('/xmlrpc', () => "XML-RPC server accepts POST requests only.")
-        .post('/xmlrpc', async ({ body, set }) => {
+        .get('/xmlrpc/debug', () => {
+            // 简单测试：验证 XML 响应构建是否正常
+            try {
+                return jsonToXmlrpcResponse("ok");
+            } catch (e: any) {
+                return `Build error: ${e.message}`;
+            }
+        })
+        .post('/xmlrpc', async ({ body, set, request }) => {
             set.headers['Content-Type'] = 'text/xml';
 
             try {
+                // Step 1: 获取 body
                 let xml: string;
-                if (typeof body === 'string') {
-                    xml = body;
-                } else if (body instanceof ArrayBuffer || (typeof Buffer !== 'undefined' && Buffer.isBuffer(body))) {
-                    xml = new TextDecoder().decode(body as any);
-                } else {
-                    xml = String(body);
+                try {
+                    if (typeof body === 'string') {
+                        xml = body;
+                    } else if (body instanceof ArrayBuffer) {
+                        xml = new TextDecoder().decode(body);
+                    } else if (body && typeof body === 'object' && typeof (body as any).text === 'function') {
+                        xml = await (body as any).text();
+                    } else {
+                        // 最后的回退：从原始 request 读取
+                        xml = await request.text();
+                    }
+                } catch (bodyErr: any) {
+                    return jsonToXmlrpcFault(500, `Body parse error: ${bodyErr.message}`);
                 }
                 
                 if (!xml || xml.trim() === "") {
                     return jsonToXmlrpcFault(400, "Empty request body");
                 }
                 
-                const { methodName, params } = xmlrpcToJSON(xml);
+                // Step 2: 解析 XML
+                let methodName: string;
+                let params: any[];
+                try {
+                    const parsed = xmlrpcToJSON(xml);
+                    methodName = parsed.methodName;
+                    params = parsed.params;
+                } catch (parseErr: any) {
+                    return jsonToXmlrpcFault(400, `XML parse error: ${parseErr.message}`);
+                }
+                
                 const db = drizzle(env.DB, { schema });
 
-                // 1. blogger.getUsersBlogs(appkey, username, password)
+                // 3. blogger.getUsersBlogs(appkey, username, password)
                 if (methodName === 'blogger.getUsersBlogs') {
                     const [_appkey, username, apiKey] = params;
-                    console.log(`[MetaWeblog] blogger.getUsersBlogs: username=${username}, hasApiKey=${!!apiKey}`);
                     const user = await validateUser(db, username, apiKey);
                     if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
 
-                    return jsonToXmlrpcResponse([
-                        {
-                            blogid: "1",
-                            blogName: user.username,
-                            url: env.FRONTEND_URL || "https://example.com",
-                            isAdmin: true
-                        }
-                    ]);
+                    try {
+                        return jsonToXmlrpcResponse([
+                            {
+                                blogid: "1",
+                                blogName: user.username,
+                                url: env.FRONTEND_URL || "https://example.com",
+                                isAdmin: true
+                            }
+                        ]);
+                    } catch (buildErr: any) {
+                        return jsonToXmlrpcFault(500, `XML build error: ${buildErr.message}`);
+                    }
                 }
 
                 // 2. metaWeblog.getRecentPosts(blogid, username, password, numberOfPosts)
@@ -253,8 +282,10 @@ export function MetaWeblogService() {
                 return jsonToXmlrpcFault(404, `Method ${methodName} not implemented`);
 
             } catch (e: any) {
-                console.error(e);
-                return jsonToXmlrpcFault(500, e.message || "Internal Server Error");
+                // 输出完整的错误堆栈到 Cloudflare Workers 日志
+                console.error('[MetaWeblog Error]', e);
+                console.error('[MetaWeblog Stack]', e.stack);
+                return jsonToXmlrpcFault(500, `Error: ${e.message}`);
             }
         });
 }
