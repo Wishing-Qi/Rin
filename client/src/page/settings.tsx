@@ -235,7 +235,6 @@ function ItemCleanup() {
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
     const [viewMode, setViewMode] = useState<'cleanup' | 'exceptions'>('cleanup');
     const { showAlert, AlertUI } = useAlert();
-    const serverConfig = useContext(ServerConfigContext);
 
     async function fetchUnusedFiles() {
         setLoading(true);
