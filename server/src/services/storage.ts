@@ -7,6 +7,7 @@ import { setup } from "../setup";
 import * as schema from "../db/schema";
 import { getEnv } from "../utils/di";
 import { createS3Client } from "../utils/s3";
+import { ServerConfig } from "../utils/cache";
 
 function buf2hex(buffer: ArrayBuffer) {
     return [...new Uint8Array(buffer)]
@@ -71,7 +72,7 @@ export function StorageService() {
                         file: t.File()
                     })
                 })
-                .get('/cleanup', async ({ uid, set }) => {
+                .get('/cleanup', async ({ uid, set, query }) => {
                     const db = drizzle(env.DB, { schema });
                     const user = await db.query.users.findFirst({
                         where: (users, { eq }) => eq(users.id, uid || 0)
@@ -81,6 +82,9 @@ export function StorageService() {
                         set.status = 403;
                         return 'Forbidden';
                     }
+
+                    // 读取例外配置
+                    const excludeExceptions = query.excludeExceptions !== 'false';
 
                     try {
                         const listResponse = await s3.send(new ListObjectsV2Command({
@@ -112,10 +116,26 @@ export function StorageService() {
                             return !isUsed;
                         });
 
-                        return unusedKeys.map(key => ({
-                            key,
-                            url: `${accessHost}/${key}`
-                        }));
+                        // 读取例外文件列表
+                        const serverConfig = ServerConfig();
+                        const exceptionsStr = await serverConfig.get<string>('storage.cleanup.exceptions');
+                        const exceptions: string[] = exceptionsStr ? exceptionsStr.split('\n').filter(s => s.trim()) : [];
+
+                        // 标记例外文件
+                        const results = unusedKeys.map(key => {
+                            const isException = exceptions.some(exc => key.includes(exc.trim()));
+                            return {
+                                key,
+                                url: `${accessHost}/${key}`,
+                                isException
+                            };
+                        });
+
+                        // 如果开启了排除例外，过滤掉例外文件
+                        if (excludeExceptions) {
+                            return results.filter(r => !r.isException);
+                        }
+                        return results;
                     } catch (e: any) {
                         set.status = 500;
                         return e.message;

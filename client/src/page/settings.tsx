@@ -231,19 +231,20 @@ export function Settings() {
 function ItemCleanup() {
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [unusedFiles, setUnusedFiles] = useState<{ key: string, url: string }[]>([]);
-    const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+    const [allFiles, setAllFiles] = useState<{ key: string, url: string, isException?: boolean }[]>([]);
+    const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+    const [viewMode, setViewMode] = useState<'cleanup' | 'exceptions'>('cleanup');
     const { showAlert, AlertUI } = useAlert();
 
     async function fetchUnusedFiles() {
         setLoading(true);
         try {
             const { data } = await client.storage.cleanup.get({
+                query: { excludeExceptions: 'false' },
                 headers: headersWithAuth()
             }) as any;
             if (Array.isArray(data)) {
-                setUnusedFiles(data);
-                setSelectedKeys(data.map(f => f.key));
+                setAllFiles(data);
                 setIsOpen(true);
             }
         } catch (e: any) {
@@ -254,21 +255,80 @@ function ItemCleanup() {
     }
 
     async function handleCleanup() {
-        if (selectedKeys.length === 0) return;
+        const keysToDelete = Array.from(selectedKeys).filter(key => {
+            const file = allFiles.find(f => f.key === key);
+            return file && !file.isException;
+        });
+        if (keysToDelete.length === 0) return;
         setLoading(true);
         try {
             const { data } = await client.storage.cleanup.post({
-                keys: selectedKeys
+                keys: keysToDelete
             }, {
                 headers: headersWithAuth()
             }) as any;
             showAlert(data.message);
             setIsOpen(false);
+            setSelectedKeys(new Set());
         } catch (e: any) {
             showAlert(e.message);
         } finally {
             setLoading(false);
         }
+    }
+
+    async function toggleException(key: string) {
+        const config = useContext(ServerConfigContext);
+        const currentExceptions = config.get<string>('storage.cleanup.exceptions') || '';
+        const file = allFiles.find(f => f.key === key);
+        if (!file) return;
+
+        const lines = currentExceptions.split('\n').filter((s: string) => s.trim());
+        const keyPart = key.includes('/') ? key.split('/').pop() || key : key;
+
+        let newExceptions: string;
+        if (file.isException) {
+            const newLines = lines.filter((l: string) => !key.includes(l.trim()));
+            newExceptions = newLines.join('\n');
+        } else {
+            lines.push(keyPart);
+            newExceptions = lines.join('\n');
+        }
+
+        await client.config({ type: 'server' }).post({ 'storage.cleanup.exceptions': newExceptions }, {
+            headers: headersWithAuth()
+        });
+
+        await fetchUnusedFiles();
+    }
+
+    const cleanupFiles = allFiles.filter(f => !f.isException);
+    const exceptionFiles = allFiles.filter(f => f.isException);
+    const currentFiles = viewMode === 'cleanup' ? cleanupFiles : exceptionFiles;
+    const visibleSelectedCount = Array.from(selectedKeys).filter(key => {
+        const file = allFiles.find(f => f.key === key);
+        return viewMode === 'cleanup' ? (file && !file.isException) : (file && file.isException);
+    }).length;
+    const allVisibleSelected = currentFiles.length > 0 && currentFiles.every(f => selectedKeys.has(f.key));
+
+    function toggleSelectAll() {
+        const newSelected = new Set(selectedKeys);
+        if (allVisibleSelected) {
+            currentFiles.forEach(f => newSelected.delete(f.key));
+        } else {
+            currentFiles.forEach(f => newSelected.add(f.key));
+        }
+        setSelectedKeys(newSelected);
+    }
+
+    function toggleSelect(key: string) {
+        const newSelected = new Set(selectedKeys);
+        if (newSelected.has(key)) {
+            newSelected.delete(key);
+        } else {
+            newSelected.add(key);
+        }
+        setSelectedKeys(newSelected);
     }
 
     return (
@@ -301,34 +361,71 @@ function ItemCleanup() {
                 overlay: { backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1000 }
             }}>
                 <div className="flex flex-col h-full bg-w">
-                    <h2 className="text-xl font-bold mb-4 t-primary">待处理文件 ({unusedFiles.length})</h2>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold t-primary">
+                            {viewMode === 'cleanup' ? `待清理文件 (${cleanupFiles.length})` : `例外文件 (${exceptionFiles.length})`}
+                        </h2>
+                        <div className="flex items-center space-x-2">
+                            <Button
+                                title={viewMode === 'cleanup' ? '切换到例外视图' : '切换到清理视图'}
+                                onClick={() => setViewMode(viewMode === 'cleanup' ? 'exceptions' : 'cleanup')}
+                                secondary
+                            />
+                        </div>
+                    </div>
+
+                    {currentFiles.length > 0 && (
+                        <div className="mb-2 flex items-center">
+                            <label className="flex items-center space-x-1 text-sm cursor-pointer">
+                                <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} />
+                                <span>全选</span>
+                            </label>
+                            <span className="text-xs text-neutral-400 ml-2">
+                                (已选 {visibleSelectedCount} / {currentFiles.length})
+                            </span>
+                        </div>
+                    )}
+
                     <div className="flex-1 overflow-y-auto mb-4 border rounded-lg p-2">
-                        {unusedFiles.length === 0 ? (
-                            <p className="p-4 text-center text-neutral-500">未发现未使用的文件。</p>
+                        {currentFiles.length === 0 ? (
+                            <p className="p-4 text-center text-neutral-500">
+                                {viewMode === 'cleanup' ? '未发现未使用的文件。' : '暂无例外文件。'}
+                            </p>
                         ) : (
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="border-b">
-                                        <th className="p-2"><input type="checkbox" checked={selectedKeys.length === unusedFiles.length} onChange={(e) => {
-                                            setSelectedKeys(e.target.checked ? unusedFiles.map(f => f.key) : []);
-                                        }} /></th>
-                                        <th className="p-2">预览</th>
+                                        <th className="p-2 w-8"></th>
+                                        <th className="p-2 w-16">预览</th>
                                         <th className="p-2">Key</th>
+                                        <th className="p-2 w-20">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {unusedFiles.map(file => (
+                                    {currentFiles.map(file => (
                                         <tr key={file.key} className="border-b hover:bg-neutral-50">
                                             <td className="p-2">
-                                                <input type="checkbox" checked={selectedKeys.includes(file.key)} onChange={(e) => {
-                                                    if (e.target.checked) setSelectedKeys([...selectedKeys, file.key]);
-                                                    else setSelectedKeys(selectedKeys.filter(k => k !== file.key));
-                                                }} />
+                                                <input type="checkbox" checked={selectedKeys.has(file.key)} onChange={() => toggleSelect(file.key)} />
                                             </td>
                                             <td className="p-2">
                                                 <img src={file.url} alt="" className="w-12 h-12 object-cover rounded shadow-sm" />
                                             </td>
                                             <td className="p-2 text-xs break-all text-neutral-600">{file.key}</td>
+                                            <td className="p-2">
+                                                {viewMode === 'cleanup' ? (
+                                                    <Button
+                                                        title="加入例外"
+                                                        onClick={() => toggleException(file.key)}
+                                                        secondary
+                                                    />
+                                                ) : (
+                                                    <Button
+                                                        title="移除例外"
+                                                        onClick={() => toggleException(file.key)}
+                                                        secondary
+                                                    />
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -337,7 +434,12 @@ function ItemCleanup() {
                     </div>
                     <div className="flex justify-end space-x-4 sticky bottom-0 bg-w pt-2">
                         <Button onClick={() => setIsOpen(false)} title="取消" secondary />
-                        <Button onClick={handleCleanup} title={`确认清理 (${selectedKeys.length})`} />
+                        {viewMode === 'cleanup' && (
+                            <Button
+                                onClick={handleCleanup}
+                                title={`确认清理 (${visibleSelectedCount})`}
+                            />
+                        )}
                     </div>
                 </div>
             </Modal>
