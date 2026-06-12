@@ -22,7 +22,7 @@ export function MetaWeblogService() {
         return user;
     }
 
-    return new Elysia({ aot: false })
+    return new Elysia({ aot: false, prefix: '/api' })
         .onParse(({ request }, contentType) => {
             if (contentType === 'text/xml' || contentType === 'application/xml') {
                 return request.text();
