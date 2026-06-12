@@ -8,6 +8,7 @@ import { getEnv } from "../utils/di";
 import { createS3Client } from "../utils/s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import path from "node:path";
+import { PublicCache } from "../utils/cache";
 
 export function MetaWeblogService() {
     const env = getEnv();
@@ -173,6 +174,7 @@ export function MetaWeblogService() {
                         }
                     }
 
+                    await PublicCache().deletePrefix('feeds_');
                     return jsonToXmlrpcResponse(newPostId.toString());
                 }
 
@@ -206,6 +208,7 @@ export function MetaWeblogService() {
                         }
                     }
 
+                    await PublicCache().deletePrefix('feeds_');
                     return jsonToXmlrpcResponse(true);
                 }
 
@@ -217,6 +220,7 @@ export function MetaWeblogService() {
                     if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
 
                     await db.delete(feeds).where(and(eq(feeds.id, parseInt(postId)), eq(feeds.uid, user.id)));
+                    await PublicCache().deletePrefix('feeds_');
                     return jsonToXmlrpcResponse(true);
                 }
 
