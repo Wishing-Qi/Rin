@@ -1,14 +1,9 @@
-import { XMLBuilder, XMLParser } from "fast-xml-parser";
+import { XMLParser } from "fast-xml-parser";
 
 const parser = new XMLParser({
     ignoreAttributes: true,
     trimValues: true,
-    parseTagValue: false // 重要：避免将 ID 字符串自动转为数字
-});
-
-const builder = new XMLBuilder({
-    ignoreAttributes: true,
-    format: true
+    parseTagValue: false
 });
 
 /**
@@ -19,7 +14,7 @@ export function xmlrpcToJSON(xml: string) {
     
     if (!obj.methodCall) throw new Error("Invalid XML-RPC: missing methodCall");
 
-    const methodName = obj.methodCall.methodName;
+    const methodName = String(obj.methodCall.methodName || "");
     const paramsWrapper = obj.methodCall.params;
     
     let params: any[] = [];
@@ -73,61 +68,69 @@ function parseValue(valueNode: any): any {
  * 将 JSON 对象转换为 XML-RPC 响应格式
  */
 export function jsonToXmlrpcResponse(data: any): string {
-    const obj = {
-        methodResponse: {
-            params: {
-                param: {
-                    value: formatValue(data)
-                }
-            }
-        }
-    };
-    return `<?xml version="1.0" encoding="UTF-8"?>\n${builder.build(obj)}`;
+    const xml = formatValue(data);
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<methodResponse>
+  <params>
+    <param>
+      <value>
+        ${xml}
+      </value>
+    </param>
+  </params>
+</methodResponse>`;
 }
 
 export function jsonToXmlrpcFault(code: number, message: string): string {
-    const obj = {
-        methodResponse: {
-            fault: {
-                value: {
-                    struct: {
-                        member: [
-                            { name: "faultCode", value: { int: code } },
-                            { name: "faultString", value: { string: message } }
-                        ]
-                    }
-                }
-            }
-        }
-    };
-    return `<?xml version="1.0" encoding="UTF-8"?>\n${builder.build(obj)}`;
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<methodResponse>
+  <fault>
+    <value>
+      <struct>
+        <member>
+          <name>faultCode</name>
+          <value><int>${code}</int></value>
+        </member>
+        <member>
+          <name>faultString</name>
+          <value><string>${escapeXml(message)}</string></value>
+        </member>
+      </struct>
+    </value>
+  </fault>
+</methodResponse>`;
 }
 
-function formatValue(data: any): any {
-    if (data === null || data === undefined) return { string: "" };
-    if (typeof data === "string") return { string: data };
+function escapeXml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
+function formatValue(data: any): string {
+    if (data === null || data === undefined) return '<string></string>';
+    if (typeof data === "string") return `<string>${escapeXml(data)}</string>`;
     if (typeof data === "number") {
-        if (Number.isInteger(data)) return { int: data };
-        return { double: data };
+        if (Number.isInteger(data)) return `<int>${data}</int>`;
+        return `<double>${data}</double>`;
     }
-    if (typeof data === "boolean") return { boolean: data ? "1" : "0" };
-    if (data instanceof Date || (typeof data === 'object' && typeof data.toISOString === 'function')) return { "dateTime.iso8601": data.toISOString() };
+    if (typeof data === "boolean") return `<boolean>${data ? '1' : '0'}</boolean>`;
+    if (data instanceof Date || (typeof data === 'object' && typeof data.toISOString === 'function')) {
+        return `<dateTime.iso8601>${data.toISOString()}</dateTime.iso8601>`;
+    }
     if (Array.isArray(data)) {
-        return {
-            array: {
-                data: {
-                    value: data.map(v => formatValue(v))
-                }
-            }
-        };
+        const values = data.map(v => `<value>${formatValue(v)}</value>`).join('\n');
+        return `<array><data>\n${values}\n</data></array>`;
     }
     if (typeof data === "object") {
-        const members = Object.entries(data).map(([name, val]) => ({
-            name,
-            value: formatValue(val)
-        }));
-        return { struct: { member: members } };
+        const members = Object.entries(data).map(([name, val]) => 
+            `<member><name>${escapeXml(name)}</name><value>${formatValue(val)}</value></member>`
+        ).join('\n');
+        return `<struct>\n${members}\n</struct>`;
     }
-    return { string: String(data) };
+    return `<string>${escapeXml(String(data))}</string>`;
 }
 
