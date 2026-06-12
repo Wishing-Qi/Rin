@@ -29,14 +29,6 @@ export function MetaWeblogService() {
             }
         })
         .get('/xmlrpc', () => "XML-RPC server accepts POST requests only.")
-        .get('/xmlrpc/debug', () => {
-            // 简单测试：验证 XML 响应构建是否正常
-            try {
-                return jsonToXmlrpcResponse("ok");
-            } catch (e: any) {
-                return `Build error: ${e.message}`;
-            }
-        })
         .post('/xmlrpc', async ({ body, set, request }) => {
             set.headers['Content-Type'] = 'text/xml';
 
@@ -81,18 +73,12 @@ export function MetaWeblogService() {
                     const user = await validateUser(db, username, apiKey);
                     if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
 
-                    try {
-                        return jsonToXmlrpcResponse([
-                            {
-                                blogid: "1",
-                                blogName: user.username,
-                                url: env.FRONTEND_URL || "https://example.com",
-                                isAdmin: true
-                            }
-                        ]);
-                    } catch (buildErr: any) {
-                        return jsonToXmlrpcFault(500, `XML build error: ${buildErr.message}`);
-                    }
+                    return jsonToXmlrpcResponse([{
+                        blogid: "1",
+                        blogName: user.username,
+                        url: env.FRONTEND_URL || "https://example.com",
+                        isAdmin: true
+                    }]);
                 }
 
                 // 2. metaWeblog.getRecentPosts(blogid, username, password, numberOfPosts)
@@ -165,6 +151,10 @@ export function MetaWeblogService() {
                         listed: 1,
                         summary: postData.description.substring(0, 200)
                     }).returning({ insertedId: feeds.id });
+
+                    if (!result || !result[0]) {
+                        return jsonToXmlrpcFault(500, "Failed to create post");
+                    }
 
                     const newPostId = result[0].insertedId;
 

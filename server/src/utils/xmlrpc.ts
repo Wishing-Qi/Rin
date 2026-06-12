@@ -111,7 +111,7 @@ function formatValue(data: any): any {
         return { double: data };
     }
     if (typeof data === "boolean") return { boolean: data ? "1" : "0" };
-    if (data instanceof Date) return { "dateTime.iso8601": data.toISOString() };
+    if (data instanceof Date || (typeof data === 'object' && typeof data.toISOString === 'function')) return { "dateTime.iso8601": data.toISOString() };
     if (Array.isArray(data)) {
         return {
             array: {
