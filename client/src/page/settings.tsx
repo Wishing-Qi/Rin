@@ -163,6 +163,7 @@ export function Settings() {
                             <ItemWithUpload title={t('settings.wordpress.title')} description={t('settings.wordpress.desc')}
                                 accept="application/xml"
                                 onFileChange={onFileChange} />
+                            <ItemAPIKey />
                         </div>
                     </main>
                 </ClientConfigContext.Provider>
@@ -505,5 +506,77 @@ function ItemWithUpload({
                 </div>
             </div>
         </div>
+    );
+}
+
+function ItemAPIKey() {
+    const { profile, setProfile } = useContext(ProfileContext);
+    const { t } = useTranslation();
+    const { showAlert, AlertUI } = useAlert();
+    const { showConfirm, ConfirmUI } = useConfirm();
+    const [loading, setLoading] = useState(false);
+
+    if (!profile || !profile.permission) return null;
+
+    async function resetAPIKey() {
+        setLoading(true);
+        try {
+            const { data, error } = await client.user['api-key'].post(undefined, {
+                headers: headersWithAuth()
+            });
+            if (error) {
+                showAlert(error.value as string);
+                return;
+            }
+            if (data && typeof data !== 'string') {
+                setProfile({ ...profile!, apiKey: data.apiKey });
+            }
+        } catch (err: any) {
+            showAlert(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function copyToClipboard() {
+        if (profile.apiKey) {
+            await navigator.clipboard.writeText(profile.apiKey);
+            showAlert(t('api_key.copy_success'));
+        }
+    }
+
+    return (
+        <div className="flex flex-col w-full items-start pb-4">
+            <div className="flex flex-row justify-between w-full items-center">
+                <div className="flex flex-col flex-1 mr-4">
+                    <p className="text-lg font-bold dark:text-white">
+                        {t('api_key.title')}
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                        {t('api_key.desc')}
+                    </p>
+                    {profile.apiKey && (
+                        <div className="bg-secondary p-2 rounded-lg mt-2 flex items-center justify-between">
+                            <code className="text-sm t-primary break-all">{profile.apiKey}</code>
+                            <button onClick={copyToClipboard} className="ml-2 text-theme text-sm shrink-0">
+                                {t('api_key.copy')}
+                            </button>
+                        </div>
+                    )}
+                </div>
+                <div className="flex flex-row items-center justify-center space-x-4">
+                    {loading && <ReactLoading width="1em" height="1em" type="spin" color="#8dd1d2" />}
+                    <Button title={profile.apiKey ? t('api_key.reset') : t('create.title')} onClick={() => {
+                        if (profile.apiKey) {
+                            showConfirm(t('api_key.title'), t('api_key.reset_confirm'), resetAPIKey);
+                        } else {
+                            resetAPIKey();
+                        }
+                    }} />
+                </div>
+            </div>
+            <AlertUI />
+            <ConfirmUI />
+        </div >
     );
 }

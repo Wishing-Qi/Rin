@@ -35,7 +35,7 @@ export function MomentsPage() {
     const query = new URLSearchParams(useSearch());
     const ref = useRef(false)
     const { t } = useTranslation()
-    const profile = useContext(ProfileContext);
+    const { profile } = useContext(ProfileContext);
     const { showAlert, AlertUI } = useAlert()
     const { showConfirm, ConfirmUI } = useConfirm()
     

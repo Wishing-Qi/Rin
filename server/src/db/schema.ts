@@ -58,6 +58,7 @@ export const users = sqliteTable("users", {
     openid: text("openid").notNull(),
     avatar: text("avatar"),
     permission: integer("permission").default(0),
+    apiKey: text("api_key"),
     createdAt: created_at,
     updatedAt: updated_at,
 });

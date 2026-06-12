@@ -14,7 +14,7 @@ import { ClientConfigContext } from "../state/config";
 
 
 export function Header({ children }: { children?: React.ReactNode }) {
-    const profile = useContext(ProfileContext);
+    const { profile } = useContext(ProfileContext);
     const { t } = useTranslation()
 
     return useMemo(() => (
@@ -104,7 +104,7 @@ function NavItem({ menu, title, selected, href, when = true, onClick }: {
 }
 
 function Menu() {
-    const profile = useContext(ProfileContext);
+    const { profile } = useContext(ProfileContext);
     const [isOpen, setOpen] = useState(false)
 
     function onClose() {
@@ -146,7 +146,7 @@ function Menu() {
 }
 
 function NavBar({ menu, onClick }: { menu: boolean, onClick?: () => void }) {
-    const profile = useContext(ProfileContext);
+    const { profile } = useContext(ProfileContext);
     const [location] = useLocation();
     const { t } = useTranslation()
     return (

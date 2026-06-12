@@ -12,6 +12,7 @@ import { StorageService } from './services/storage';
 import { TagService } from './services/tag';
 import { UserService } from './services/user';
 import { ConfigService } from './services/config';
+import { MetaWeblogService } from './services/metaweblog';
 
 export const app = () => new Elysia({ aot: false })
     .use(cors({
@@ -40,6 +41,7 @@ export const app = () => new Elysia({ aot: false })
     .use(RSSService())
     .use(ConfigService())
     .use(MomentsService())
+    .use(MetaWeblogService())
     .get('/', () => `Hi`)
     .onError(({ path, params, code }) => {
         if (code === 'NOT_FOUND')

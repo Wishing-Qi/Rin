@@ -25,7 +25,7 @@ type FeedsMap = {
 export function FeedsPage() {
     const { t } = useTranslation()
     const query = new URLSearchParams(useSearch());
-    const profile = useContext(ProfileContext);
+    const { profile } = useContext(ProfileContext);
     const [listState, _setListState] = useState<FeedType>(query.get("type") as FeedType || 'normal')
     const [status, setStatus] = useState<'loading' | 'idle'>('idle')
     const [feeds, setFeeds] = useState<FeedsMap>({

@@ -44,7 +44,7 @@ type Feed = {
 
 export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Element, clean: (id: string) => void }) {
   const { t } = useTranslation();
-  const profile = useContext(ProfileContext);
+  const { profile } = useContext(ProfileContext);
   const [feed, setFeed] = useState<Feed>();
   const [error, setError] = useState<string>();
   const [headImage, setHeadImage] = useState<string>();
@@ -397,7 +397,7 @@ function CommentInput({
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
   const { showAlert, AlertUI } = useAlert();
-  const profile = useContext(ProfileContext);
+  const { profile } = useContext(ProfileContext);
   const { LoginModal, setIsOpened } = useLoginModal()
   function errorHumanize(error: string) {
     if (error === "Unauthorized") return t("login.required");
@@ -549,7 +549,7 @@ function CommentItem({
   const { showConfirm, ConfirmUI } = useConfirm();
   const { showAlert, AlertUI } = useAlert();
   const { t } = useTranslation();
-  const profile = useContext(ProfileContext);
+  const { profile } = useContext(ProfileContext);
   function deleteComment() {
     showConfirm(
       t("delete.comment.title"),

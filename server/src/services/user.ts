@@ -106,9 +106,20 @@ export function UserService() {
                         username: user.username,
                         avatar: user.avatar,
                         permission: user.permission === 1,
+                        apiKey: user.apiKey,
                         createdAt: user.createdAt,
                         updatedAt: user.updatedAt,
                     }
+                })
+                .post('/api-key', async ({ set, uid }) => {
+                    if (!uid) {
+                        set.status = 403
+                        return 'Permission denied'
+                    }
+                    const uid_num = parseInt(uid)
+                    const apiKey = crypto.randomUUID()
+                    await db.update(users).set({ apiKey }).where(eq(users.id, uid_num))
+                    return { apiKey }
                 })
         )
 }

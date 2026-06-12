@@ -55,7 +55,7 @@ export function FriendsPage() {
     const [desc, setDesc] = useState("")
     const [avatar, setAvatar] = useState("")
     const [url, setUrl] = useState("")
-    const profile = useContext(ProfileContext);
+    const { profile } = useContext(ProfileContext);
     const [friendsAvailable, setFriendsAvailable] = useState<FriendItem[]>([])
     const [waitList, setWaitList] = useState<FriendItem[]>([])
     const [refusedList, setRefusedList] = useState<FriendItem[]>([])
@@ -148,7 +148,7 @@ function FriendList({ title, show, friends }: { title: string, show: boolean, fr
 
 function Friend({ friend }: { friend: FriendItem }) {
     const { t } = useTranslation()
-    const profile = useContext(ProfileContext)
+    const { profile } = useContext(ProfileContext)
     const [avatar, setAvatar] = useState(friend.avatar)
     const [name, setName] = useState(friend.name)
     const [desc, setDesc] = useState(friend.desc || "")

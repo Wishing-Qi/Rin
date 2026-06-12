@@ -53,7 +53,8 @@ function App() {
             id: data.id,
             avatar: data.avatar || '',
             permission: data.permission,
-            name: data.username
+            name: data.username,
+            apiKey: data.apiKey
           })
         }
       })
@@ -78,7 +79,7 @@ function App() {
   return (
     <>
       <ClientConfigContext.Provider value={config}>
-        <ProfileContext.Provider value={profile}>
+        <ProfileContext.Provider value={{ profile, setProfile }}>
           <Helmet>
             {favicon &&
               <link rel="icon" href={favicon} />}
@@ -189,8 +190,8 @@ function App() {
 
 function RouteMe({ path, children, headerComponent, paddingClassName, requirePermission }:
   { path?: PathPattern, children: React.ReactNode | ((params: DefaultParams) => React.ReactNode), headerComponent?: React.ReactNode, paddingClassName?: string, requirePermission?: boolean }) {
+  const { profile } = useContext(ProfileContext);
   if (requirePermission) {
-    const profile = useContext(ProfileContext);
     const { t } = useTranslation();
     if (!profile?.permission)
       children = <ErrorPage error={t('error.permission_denied')} />;

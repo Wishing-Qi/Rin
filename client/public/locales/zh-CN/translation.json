@@ -101,6 +101,14 @@
     },
     "title": "朋友们"
   },
+  "api_key": {
+    "title": "API Key",
+    "desc": "用于 MetaWeblog API 等第三方客户端登录",
+    "reset": "重置",
+    "reset_confirm": "确定要重置 API Key 吗？重置后原有的 Key 将失效。",
+    "copy": "复制",
+    "copy_success": "复制成功"
+  },
   "github_login": "Github 登录",
   "hashtags": "标签",
   "home": "首页",
