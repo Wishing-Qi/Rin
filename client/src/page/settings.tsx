@@ -279,7 +279,12 @@ function ItemCleanup() {
     }
 
     async function toggleException(key: string) {
-        const currentExceptions = serverConfig.get<string>('storage.cleanup.exceptions') || '';
+        // 先刷新服务端配置，获取最新的例外列表
+        const { data } = await client.config({ type: 'server' }).get({
+            headers: headersWithAuth()
+        }) as any;
+        const freshConfig = new ConfigWrapper(data || {}, defaultServerConfig);
+        const currentExceptions = freshConfig.get<string>('storage.cleanup.exceptions') || '';
         const file = allFiles.find(f => f.key === key);
         if (!file) return;
 
