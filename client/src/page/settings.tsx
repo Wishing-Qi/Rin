@@ -540,7 +540,7 @@ function ItemAPIKey() {
     }
 
     async function copyToClipboard() {
-        if (profile.apiKey) {
+        if (profile?.apiKey) {
             await navigator.clipboard.writeText(profile.apiKey);
             showAlert(t('api_key.copy_success'));
         }
@@ -556,7 +556,7 @@ function ItemAPIKey() {
                     <p className="text-xs text-neutral-500">
                         {t('api_key.desc')}
                     </p>
-                    {profile.apiKey && (
+                    {profile?.apiKey && (
                         <div className="bg-secondary p-2 rounded-lg mt-2 flex items-center justify-between">
                             <code className="text-sm t-primary break-all">{profile.apiKey}</code>
                             <button onClick={copyToClipboard} className="ml-2 text-theme text-sm shrink-0">
