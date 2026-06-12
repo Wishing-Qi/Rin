@@ -164,6 +164,7 @@ export function Settings() {
                             <ItemWithUpload title={t('settings.wordpress.title')} description={t('settings.wordpress.desc')}
                                 accept="application/xml"
                                 onFileChange={onFileChange} />
+                            <ItemCleanup />
                             <ItemAPIKey />
                         </div>
                     </main>
@@ -219,6 +220,129 @@ export function Settings() {
                         }} className="bg-theme text-white rounded-xl px-8 py-2 h-min">
                             {t('close')}
                         </button>
+                    </div>
+                </div>
+            </Modal>
+            <AlertUI />
+        </div>
+    );
+}
+
+function ItemCleanup() {
+    const { t } = useTranslation();
+    const [isOpen, setIsOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [unusedFiles, setUnusedFiles] = useState<{ key: string, url: string }[]>([]);
+    const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+    const { showAlert, AlertUI } = useAlert();
+
+    async function fetchUnusedFiles() {
+        setLoading(true);
+        try {
+            const { data } = await client.storage.cleanup.get({
+                headers: headersWithAuth()
+            }) as any;
+            if (Array.isArray(data)) {
+                setUnusedFiles(data);
+                setSelectedKeys(data.map(f => f.key));
+                setIsOpen(true);
+            }
+        } catch (e: any) {
+            showAlert(e.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleCleanup() {
+        if (selectedKeys.length === 0) return;
+        setLoading(true);
+        try {
+            const { data } = await client.storage.cleanup.post({
+                keys: selectedKeys
+            }, {
+                headers: headersWithAuth()
+            }) as any;
+            showAlert(data.message);
+            setIsOpen(false);
+        } catch (e: any) {
+            showAlert(e.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div className="flex flex-col w-full items-start py-2">
+            <div className="flex flex-row justify-between w-full items-center">
+                <div className="flex flex-col">
+                    <p className="text-lg font-bold dark:text-white">清理未使用文件</p>
+                    <p className="text-xs text-neutral-500">列出并删除 S3 中未被引用的附件（图片等）。慎用！</p>
+                </div>
+                <div className="flex flex-row items-center space-x-2">
+                    {loading && <ReactLoading width="1em" height="1em" type="spin" color="#8dd1d2" />}
+                    <Button onClick={fetchUnusedFiles} disabled={loading}>
+                        扫描
+                    </Button>
+                </div>
+            </div>
+
+            <Modal isOpen={isOpen} onRequestClose={() => setIsOpen(false)} style={{
+                content: {
+                    top: '50%',
+                    left: '50%',
+                    right: 'auto',
+                    bottom: 'auto',
+                    marginRight: '-50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '80%',
+                    maxWidth: '800px',
+                    maxHeight: '80vh',
+                    borderRadius: '16px',
+                    padding: '24px'
+                },
+                overlay: { backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1000 }
+            }}>
+                <div className="flex flex-col h-full bg-w">
+                    <h2 className="text-xl font-bold mb-4 t-primary">待处理文件 ({unusedFiles.length})</h2>
+                    <div className="flex-1 overflow-y-auto mb-4 border rounded-lg p-2">
+                        {unusedFiles.length === 0 ? (
+                            <p className="p-4 text-center text-neutral-500">未发现未使用的文件。</p>
+                        ) : (
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b">
+                                        <th className="p-2"><input type="checkbox" checked={selectedKeys.length === unusedFiles.length} onChange={(e) => {
+                                            setSelectedKeys(e.target.checked ? unusedFiles.map(f => f.key) : []);
+                                        }} /></th>
+                                        <th className="p-2">预览</th>
+                                        <th className="p-2">Key</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {unusedFiles.map(file => (
+                                        <tr key={file.key} className="border-b hover:bg-neutral-50">
+                                            <td className="p-2">
+                                                <input type="checkbox" checked={selectedKeys.includes(file.key)} onChange={(e) => {
+                                                    if (e.target.checked) setSelectedKeys([...selectedKeys, file.key]);
+                                                    else setSelectedKeys(selectedKeys.filter(k => k !== file.key));
+                                                }} />
+                                            </td>
+                                            <td className="p-2">
+                                                <img src={file.url} alt="" className="w-12 h-12 object-cover rounded shadow-sm" />
+                                            </td>
+                                            <td className="p-2 text-xs break-all text-neutral-600">{file.key}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                    <div className="flex justify-end space-x-4 sticky bottom-0 bg-w pt-2">
+                        <Button className="!bg-neutral-200 !text-black" onClick={() => setIsOpen(false)}>取消</Button>
+                        <Button className="!bg-red-500" onClick={handleCleanup} disabled={selectedKeys.length === 0 || loading}>
+                            确认清理 ({selectedKeys.length})
+                        </Button>
                     </div>
                 </div>
             </Modal>

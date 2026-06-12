@@ -23,11 +23,28 @@ export function MetaWeblogService() {
     }
 
     return new Elysia({ aot: false })
+        .onParse(({ request }, contentType) => {
+            if (contentType === 'text/xml' || contentType === 'application/xml') {
+                return request.text();
+            }
+        })
         .post('/api/xmlrpc', async ({ body, set }) => {
             set.headers['Content-Type'] = 'text/xml';
 
             try {
-                const xml = typeof body === 'string' ? body : JSON.stringify(body);
+                let xml: string;
+                if (typeof body === 'string') {
+                    xml = body;
+                } else if (body instanceof ArrayBuffer || (typeof Buffer !== 'undefined' && Buffer.isBuffer(body))) {
+                    xml = new TextDecoder().decode(body as any);
+                } else {
+                    xml = String(body);
+                }
+                
+                if (!xml || xml.trim() === "") {
+                    return jsonToXmlrpcFault(400, "Empty request body");
+                }
+                
                 const { methodName, params } = xmlrpcToJSON(xml);
                 const db = drizzle(env.DB, { schema });
 
