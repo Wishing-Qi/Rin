@@ -235,6 +235,7 @@ function ItemCleanup() {
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
     const [viewMode, setViewMode] = useState<'cleanup' | 'exceptions'>('cleanup');
     const { showAlert, AlertUI } = useAlert();
+    const serverConfig = useContext(ServerConfigContext);
 
     async function fetchUnusedFiles() {
         setLoading(true);
@@ -278,8 +279,7 @@ function ItemCleanup() {
     }
 
     async function toggleException(key: string) {
-        const config = useContext(ServerConfigContext);
-        const currentExceptions = config.get<string>('storage.cleanup.exceptions') || '';
+        const currentExceptions = serverConfig.get<string>('storage.cleanup.exceptions') || '';
         const file = allFiles.find(f => f.key === key);
         if (!file) return;
 
