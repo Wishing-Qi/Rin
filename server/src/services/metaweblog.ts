@@ -28,7 +28,8 @@ export function MetaWeblogService() {
                 return request.text();
             }
         })
-        .post('/api/xmlrpc', async ({ body, set }) => {
+        .get('/xmlrpc', () => "XML-RPC server accepts POST requests only.")
+        .post('/xmlrpc', async ({ body, set }) => {
             set.headers['Content-Type'] = 'text/xml';
 
             try {
