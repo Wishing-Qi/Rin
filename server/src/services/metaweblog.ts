@@ -52,6 +52,7 @@ export function MetaWeblogService() {
                 // 1. blogger.getUsersBlogs(appkey, username, password)
                 if (methodName === 'blogger.getUsersBlogs') {
                     const [_appkey, username, apiKey] = params;
+                    console.log(`[MetaWeblog] blogger.getUsersBlogs: username=${username}, hasApiKey=${!!apiKey}`);
                     const user = await validateUser(db, username, apiKey);
                     if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
 
@@ -59,7 +60,7 @@ export function MetaWeblogService() {
                         {
                             blogid: "1",
                             blogName: user.username,
-                            url: env.FRONTEND_URL,
+                            url: env.FRONTEND_URL || "https://example.com",
                             isAdmin: true
                         }
                     ]);
