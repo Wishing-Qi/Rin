@@ -54,7 +54,7 @@ function App() {
             avatar: data.avatar || '',
             permission: data.permission,
             name: data.username,
-            apiKey: data.apiKey
+            apiKey: data.apiKey || undefined
           })
         }
       })

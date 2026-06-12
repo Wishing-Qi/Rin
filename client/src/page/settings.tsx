@@ -16,6 +16,7 @@ import {
     ServerConfigContext
 } from "../state/config.tsx";
 import {headersWithAuth} from "../utils/auth.ts";
+import {ProfileContext} from "../state/profile.tsx";
 import '../utils/thumb.css';
 
 

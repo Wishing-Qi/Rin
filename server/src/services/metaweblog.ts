@@ -123,12 +123,15 @@ export function MetaWeblogService() {
                     // Handle categories (tags)
                     if (postData.categories && Array.isArray(postData.categories)) {
                         for (const catName of postData.categories) {
-                            let tag = await db.query.hashtags.findFirst({ where: eq(hashtags.name, catName) });
-                            if (!tag) {
+                            let tagId: number;
+                            const existingTag = await db.query.hashtags.findFirst({ where: eq(hashtags.name, catName) });
+                            if (!existingTag) {
                                 const tagResult = await db.insert(hashtags).values({ name: catName }).returning({ id: hashtags.id });
-                                tag = tagResult[0];
+                                tagId = tagResult[0].id;
+                            } else {
+                                tagId = existingTag.id;
                             }
-                            await db.insert(feedHashtags).values({ feedId: newPostId, hashtagId: tag.id });
+                            await db.insert(feedHashtags).values({ feedId: newPostId, hashtagId: tagId });
                         }
                     }
 
@@ -153,12 +156,15 @@ export function MetaWeblogService() {
                     await db.delete(feedHashtags).where(eq(feedHashtags.feedId, parseInt(postId)));
                     if (postData.categories && Array.isArray(postData.categories)) {
                         for (const catName of postData.categories) {
-                            let tag = await db.query.hashtags.findFirst({ where: eq(hashtags.name, catName) });
-                            if (!tag) {
+                            let tagId: number;
+                            const existingTag = await db.query.hashtags.findFirst({ where: eq(hashtags.name, catName) });
+                            if (!existingTag) {
                                 const tagResult = await db.insert(hashtags).values({ name: catName }).returning({ id: hashtags.id });
-                                tag = tagResult[0];
+                                tagId = tagResult[0].id;
+                            } else {
+                                tagId = existingTag.id;
                             }
-                            await db.insert(feedHashtags).values({ feedId: parseInt(postId), hashtagId: tag.id });
+                            await db.insert(feedHashtags).values({ feedId: parseInt(postId), hashtagId: tagId });
                         }
                     }
 
