@@ -229,7 +229,6 @@ export function Settings() {
 }
 
 function ItemCleanup() {
-    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [unusedFiles, setUnusedFiles] = useState<{ key: string, url: string }[]>([]);
@@ -281,9 +280,7 @@ function ItemCleanup() {
                 </div>
                 <div className="flex flex-row items-center space-x-2">
                     {loading && <ReactLoading width="1em" height="1em" type="spin" color="#8dd1d2" />}
-                    <Button onClick={fetchUnusedFiles} disabled={loading}>
-                        扫描
-                    </Button>
+                    <Button onClick={fetchUnusedFiles} title="扫描" />
                 </div>
             </div>
 
@@ -339,10 +336,8 @@ function ItemCleanup() {
                         )}
                     </div>
                     <div className="flex justify-end space-x-4 sticky bottom-0 bg-w pt-2">
-                        <Button className="!bg-neutral-200 !text-black" onClick={() => setIsOpen(false)}>取消</Button>
-                        <Button className="!bg-red-500" onClick={handleCleanup} disabled={selectedKeys.length === 0 || loading}>
-                            确认清理 ({selectedKeys.length})
-                        </Button>
+                        <Button onClick={() => setIsOpen(false)} title="取消" secondary />
+                        <Button onClick={handleCleanup} title={`确认清理 (${selectedKeys.length})`} />
                     </div>
                 </div>
             </Modal>
