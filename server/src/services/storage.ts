@@ -118,8 +118,8 @@ export function StorageService() {
 
                         // 读取例外文件列表
                         const serverConfig = ServerConfig();
-                        const exceptionsStr = await serverConfig.get<string>('storage.cleanup.exceptions');
-                        const exceptions: string[] = exceptionsStr ? exceptionsStr.split('\n').filter(s => s.trim()) : [];
+                        const exceptionsStr = await serverConfig.get('storage.cleanup.exceptions');
+                        const exceptions: string[] = exceptionsStr ? String(exceptionsStr).split('\n').filter((s: string) => s.trim()) : [];
 
                         // 标记例外文件
                         const results = unusedKeys.map(key => {
