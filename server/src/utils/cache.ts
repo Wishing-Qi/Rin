@@ -114,6 +114,8 @@ export class CacheImpl {
     }
 
     async deletePrefix(prefix: string) {
+        if (!this.loaded)
+            await this.load();
         for (let key of this.cache.keys()) {
             console.log('Cache key', key);
             if (key.startsWith(prefix)) {
@@ -124,6 +126,8 @@ export class CacheImpl {
         await this.save();
     }
     async deleteSuffix(suffix: string) {
+        if (!this.loaded)
+            await this.load();
         for (let key of this.cache.keys()) {
             console.log("Cache key", key);
             if (key.endsWith(suffix)) {
