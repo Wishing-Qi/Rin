@@ -68,7 +68,7 @@ export function MetaWeblogService() {
                 
                 const db = drizzle(env.DB, { schema });
 
-                // 3. blogger.getUsersBlogs(appkey, username, password)
+                // 1. blogger.getUsersBlogs(appkey, username, password)
                 if (methodName === 'blogger.getUsersBlogs') {
                     const [_appkey, username, apiKey] = params;
                     const user = await validateUser(db, username, apiKey);
@@ -184,16 +184,22 @@ export function MetaWeblogService() {
                     const user = await validateUser(db, username, apiKey);
                     if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
 
+                    const feedId = parseInt(postId);
+                    const existingFeed = await db.query.feeds.findFirst({
+                        where: and(eq(feeds.id, feedId), eq(feeds.uid, user.id)),
+                        columns: { alias: true }
+                    });
+
                     await db.update(feeds).set({
                         title: postData.title,
                         content: postData.description,
                         draft: publish ? 0 : 1,
                         updatedAt: new Date(),
                         summary: postData.description.substring(0, 200)
-                    }).where(and(eq(feeds.id, parseInt(postId)), eq(feeds.uid, user.id)));
+                    }).where(and(eq(feeds.id, feedId), eq(feeds.uid, user.id)));
 
                     // Update categories (simple approach: clear and re-add)
-                    await db.delete(feedHashtags).where(eq(feedHashtags.feedId, parseInt(postId)));
+                    await db.delete(feedHashtags).where(eq(feedHashtags.feedId, feedId));
                     if (postData.categories && Array.isArray(postData.categories)) {
                         for (const catName of postData.categories) {
                             let tagId: number;
@@ -204,11 +210,20 @@ export function MetaWeblogService() {
                             } else {
                                 tagId = existingTag.id;
                             }
-                            await db.insert(feedHashtags).values({ feedId: parseInt(postId), hashtagId: tagId });
+                            await db.insert(feedHashtags).values({ feedId: feedId, hashtagId: tagId });
                         }
                     }
 
-                    await PublicCache().deletePrefix('feeds_');
+                    const cache = PublicCache();
+                    await cache.deletePrefix('feeds_');
+                    await cache.deletePrefix('search_');
+                    await cache.delete(`feed_${feedId}`, false);
+                    await cache.deletePrefix(`${feedId}_previous_feed`);
+                    await cache.deletePrefix(`${feedId}_next_feed`);
+                    if (existingFeed?.alias) {
+                        await cache.delete(`feed_${existingFeed.alias}`, false);
+                    }
+
                     return jsonToXmlrpcResponse(true);
                 }
 
@@ -219,8 +234,24 @@ export function MetaWeblogService() {
                     const user = await validateUser(db, username, apiKey);
                     if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
 
-                    await db.delete(feeds).where(and(eq(feeds.id, parseInt(postId)), eq(feeds.uid, user.id)));
-                    await PublicCache().deletePrefix('feeds_');
+                    const feedId = parseInt(postId);
+                    const existingFeed = await db.query.feeds.findFirst({
+                        where: and(eq(feeds.id, feedId), eq(feeds.uid, user.id)),
+                        columns: { alias: true }
+                    });
+
+                    await db.delete(feeds).where(and(eq(feeds.id, feedId), eq(feeds.uid, user.id)));
+
+                    const cache = PublicCache();
+                    await cache.deletePrefix('feeds_');
+                    await cache.deletePrefix('search_');
+                    await cache.delete(`feed_${feedId}`, false);
+                    await cache.deletePrefix(`${feedId}_previous_feed`);
+                    await cache.deletePrefix(`${feedId}_next_feed`);
+                    if (existingFeed?.alias) {
+                        await cache.delete(`feed_${existingFeed.alias}`, false);
+                    }
+
                     return jsonToXmlrpcResponse(true);
                 }
 
