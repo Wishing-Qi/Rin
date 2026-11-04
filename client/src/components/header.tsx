@@ -67,10 +67,10 @@ export function Header({ children }: { children?: React.ReactNode }) {
       : `fixed inset-x-0 top-0 z-40 transition-transform duration-300 ${
           headerBehavior === "reveal" && !isRevealed ? "-translate-y-full" : "translate-y-0"
         }`;
-  const spacerClassName =
-    !useTopHeader || headerBehavior === "static"
-      ? "h-20 md:h-52"
-      : "h-[var(--hero-height-mobile)] md:h-[var(--hero-height-desktop)]";
+  const isArticleReading = Boolean(children);
+  const spacerClassName = isArticleReading
+    ? "h-[var(--hero-height-mobile)] md:h-[var(--hero-height-desktop)]"
+    : "h-20 md:h-[calc(var(--hero-height-desktop)-6.75rem)]";
 
   return (
     <>
