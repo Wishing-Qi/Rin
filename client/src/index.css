@@ -1,5 +1,5 @@
-@import "./base.css";
 @import "@rin/ui/styles.css";
+@import "./base.css";
 
 /* Regular (400) */
 @font-face {

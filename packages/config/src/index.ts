@@ -11,7 +11,7 @@ export const CLIENT_CONFIG_DEFAULTS = new Map(
     "header.layout": "classic",
     "feed.layout": "list",
     "feed.card_variant": "default",
-    "theme.color": "#fc466b",
+    "theme.color": "#8dd1d2",
     "comment.enabled": true,
     "login.enabled": true,
     "site.name": "Rin",

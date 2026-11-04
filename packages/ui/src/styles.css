@@ -1,8 +1,8 @@
 :root {
-  --theme-rgb: 252 70 107;
-  --theme-hover-rgb: 177 48 73;
-  --theme-active-rgb: 151 32 56;
-  --rin-canvas-rgb: 245 245 245;
+  --theme-rgb: 141 209 210;
+  --theme-hover-rgb: 118 192 193;
+  --theme-active-rgb: 91 169 170;
+  --rin-canvas-rgb: 244 253 253;
   --rin-surface-rgb: 255 255 255;
   --rin-surface-muted-rgb: 245 245 245;
   --rin-surface-hover-rgb: 229 229 229;
@@ -17,11 +17,11 @@
 }
 
 [data-color-mode="dark"] {
-  --rin-canvas-rgb: 28 28 30;
-  --rin-surface-rgb: 51 51 51;
-  --rin-surface-muted-rgb: 64 64 64;
-  --rin-surface-hover-rgb: 82 82 82;
-  --rin-surface-active-rgb: 115 115 115;
+  --rin-canvas-rgb: 16 40 40;
+  --rin-surface-rgb: 31 49 50;
+  --rin-surface-muted-rgb: 43 67 68;
+  --rin-surface-hover-rgb: 55 84 85;
+  --rin-surface-active-rgb: 70 105 106;
   --rin-text-rgb: 250 250 250;
   --rin-text-muted-rgb: 212 212 216;
   --rin-border-rgb: 255 255 255;

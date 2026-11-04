@@ -1,4 +1,4 @@
-const DEFAULT_THEME_COLOR = "#fc466b";
+const DEFAULT_THEME_COLOR = "#8dd1d2";
 
 function normalizeHex(value: string | undefined | null) {
   if (!value) return DEFAULT_THEME_COLOR;

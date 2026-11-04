@@ -2,12 +2,48 @@ import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { timeago } from "../utils/timeago";
 import { HashTag } from "./hashtag";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { drawBlurhashToCanvas } from "../utils/blurhash";
 import { parseImageUrlMetadata } from "../utils/image-upload";
 import { useImageLoadState } from "../utils/use-image-load-state";
 import { type FeedCardVariant, normalizeFeedCardVariant } from "./feed-card-options";
 import { useSiteConfig } from "../hooks/useSiteConfig";
+
+function stripMarkdownPreview(content: string): string {
+    if (!content) return "";
+    let text = content;
+    text = text.replace(/<!--[\s\S]*?-->/g, "");
+    text = text.replace(/<script[\s\S]*?<\/script>/gi, "");
+    text = text.replace(/<style[\s\S]*?<\/style>/gi, "");
+    text = text.replace(/<iframe[\s\S]*?<\/iframe>/gi, "");
+    text = text.replace(/<pre[\s\S]*?<\/pre>/gi, "");
+    text = text.replace(/`{3}[\s\S]*?`{3}/g, "");
+    text = text.replace(/!\[.*?\]\(.*?\)/g, "");
+    text = text.replace(/\[([^\]]*)\]\(.*?\)/g, "$1");
+    text = text.replace(/^> \[!\w+\]/gm, "");
+    text = text.replace(/^#{1,6}\s+/gm, "");
+    text = text.replace(/^>\s+/gm, "");
+    text = text.replace(/^(\s*)- \[[ x]\]\s+/gm, "$1");
+    text = text.replace(/^[-*+]\s+/gm, "");
+    text = text.replace(/^\d+\.\s+/gm, "");
+    text = text.replace(/`([^`]+)`/g, "$1");
+    text = text.replace(/\*\*(.+?)\*\*/g, "$1");
+    text = text.replace(/__(.+?)__/g, "$1");
+    text = text.replace(/\*(.+?)\*/g, "$1");
+    text = text.replace(/_(.+?)_/g, "$1");
+    text = text.replace(/~~(.+?)~~/g, "$1");
+    text = text.replace(/<[^>]+>/g, "");
+    text = text.replace(/\[.*?\]\[.*?\]/g, "");
+    text = text.replace(/^\[.*?\]:\s+.*$/gm, "");
+    text = text.replace(/^---+$/gm, "");
+    text = text.replace(/\|\s*[-:]+\s*\|/g, "");
+    text = text.replace(/\|/g, " ");
+    text = text.replace(/---+$/gm, "");
+    text = text.replace(/\$\$[\s\S]*?\$\$/g, "");
+    text = text.replace(/\$([^$]+)\$/g, "$1");
+    text = text.replace(/:\w+:/g, "");
+    return text.trim();
+}
 
 function FeedCardImage({ src, variant }: { src: string; variant: FeedCardVariant }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -109,6 +145,7 @@ export function FeedCard({ id, title, avatar, draft, listed, top, summary, hasht
     const safeHashtags = Array.isArray(hashtags) ? hashtags : [];
     const activeVariant = normalizeFeedCardVariant(variant ?? siteConfig.feedCardVariant);
     const styles = FEED_CARD_STYLES[activeVariant];
+    const cleanSummary = useMemo(() => stripMarkdownPreview(summary), [summary]);
     const body = (
         <div className={styles.card}>
             {avatar ? (
@@ -133,7 +170,7 @@ export function FeedCard({ id, title, avatar, draft, listed, top, summary, hasht
                     {listed === 0 && <span>{t("unlisted")}</span>}
                     {top === 1 && <span className="text-theme">{t('article.top.title')}</span>}
                 </p>
-                <p className={`whitespace-pre-line break-words [overflow-wrap:anywhere] ${styles.summary} ${activeVariant === "editorial" ? "mt-4 max-w-3xl" : ""}`}>{summary}</p>
+                <p className={`whitespace-pre-line break-words [overflow-wrap:anywhere] ${styles.summary} ${activeVariant === "editorial" ? "mt-4 max-w-3xl" : ""}`}>{cleanSummary}</p>
                 {safeHashtags.length > 0 &&
                     <div className={`flex flex-row flex-wrap justify-start gap-2 ${activeVariant === "editorial" ? "mt-4" : "mt-2 gap-x-2"}`}>
                         {safeHashtags.map(({ name }, index) => (

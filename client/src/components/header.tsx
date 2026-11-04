@@ -67,7 +67,10 @@ export function Header({ children }: { children?: React.ReactNode }) {
       : `fixed inset-x-0 top-0 z-40 transition-transform duration-300 ${
           headerBehavior === "reveal" && !isRevealed ? "-translate-y-full" : "translate-y-0"
         }`;
-  const spacerClassName = !useTopHeader || headerBehavior === "static" ? "h-0" : "h-20";
+  const spacerClassName =
+    !useTopHeader || headerBehavior === "static"
+      ? "h-20 md:h-52"
+      : "h-[var(--hero-height-mobile)] md:h-[var(--hero-height-desktop)]";
 
   return (
     <>
@@ -82,7 +85,7 @@ export function Header({ children }: { children?: React.ReactNode }) {
         <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b from-theme/15 to-white/0 dark:from-theme/20 dark:to-transparent" />
       ) : null}
       <div ref={headerRef} className={containerClassName}>
-        <div className="w-screen">
+        <div className="w-full">
           {headerLayout === "compact" ? (
             <div className="w-full">
               {layoutDefinition.renderMobile({ children, profile, siteConfig, behavior: headerBehavior, isAtTop })}

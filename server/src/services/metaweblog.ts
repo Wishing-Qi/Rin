@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppContext, DB } from "../core/hono-types";
 import { feedHashtags, feeds, hashtags, users } from "../db/schema";
+import { stripMarkdown } from "../utils/markdown";
 import { putStorageObject } from "../utils/storage";
 import { jsonToXmlrpcFault, jsonToXmlrpcResponse, xmlrpcToJSON } from "../utils/xmlrpc";
 import { clearFeedCache, clearFeedCollectionCaches } from "./clear-feed-cache";
@@ -158,6 +159,7 @@ export function MetaWeblogService(): Hono {
                 const user = await validateUser(db, username, apiKey);
                 if (!user) return xmlReply(jsonToXmlrpcFault(403, "Invalid username or API Key"));
 
+                const plainSummary = stripMarkdown(String(postData.description || "")).substring(0, 200);
                 const result = await db
                     .insert(feeds)
                     .values({
@@ -166,7 +168,7 @@ export function MetaWeblogService(): Hono {
                         uid: user.id,
                         draft: publish ? 0 : 1,
                         listed: 1,
-                        summary: postData.description.substring(0, 200),
+                        summary: plainSummary,
                     })
                     .returning({ insertedId: feeds.id });
 
@@ -211,6 +213,7 @@ export function MetaWeblogService(): Hono {
                     columns: { alias: true },
                 });
 
+                const plainSummary = stripMarkdown(String(postData.description || "")).substring(0, 200);
                 await db
                     .update(feeds)
                     .set({
@@ -218,7 +221,7 @@ export function MetaWeblogService(): Hono {
                         content: postData.description,
                         draft: publish ? 0 : 1,
                         updatedAt: new Date(),
-                        summary: postData.description.substring(0, 200),
+                        summary: plainSummary,
                     })
                     .where(and(eq(feeds.id, feedId), eq(feeds.uid, user.id)));
 

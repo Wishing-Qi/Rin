@@ -1,30 +1,31 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --theme-rgb: 141 209 210;
+  --theme-hover-rgb: 118 192 193;
+  --theme-active-rgb: 91 169 170;
+  --rin-canvas-rgb: 244 253 253;
+  --hero-height-mobile: 10rem;
+  --hero-height-desktop: 18rem;
+  --hero-surface-top: rgba(141, 209, 210, 0.3);
+  --hero-surface-bottom: rgba(244, 253, 253, 0);
+  --hero-overlay-top: rgba(0, 0, 0, 0.18);
+  --hero-overlay-bottom: rgba(255, 255, 255, 0);
+}
+
+[data-color-mode="dark"],
+.dark {
+  --rin-canvas-rgb: 16 40 40;
+  --rin-surface-rgb: 31 49 50;
+  --hero-surface-top: rgba(16, 40, 40, 0.55);
+  --hero-surface-bottom: rgba(16, 40, 40, 0);
+  --hero-overlay-top: rgba(0, 0, 0, 0.75);
+  --hero-overlay-bottom: rgba(16, 40, 40, 0);
+}
+
 @layer base {
-    :root {
-      --theme-rgb: 141 209 210;
-      --theme-hover-rgb: 118 192 193;
-      --theme-active-rgb: 91 169 170;
-      --rin-canvas-rgb: 244 253 253;
-      --hero-height-mobile: 10rem;
-      --hero-height-desktop: 18rem;
-      --hero-surface-top: rgba(141, 209, 210, 0.3);
-      --hero-surface-bottom: rgba(244, 253, 253, 0);
-      --hero-overlay-top: rgba(0, 0, 0, 0.18);
-      --hero-overlay-bottom: rgba(255, 255, 255, 0);
-    }
-
-    [data-color-mode="dark"],
-    .dark {
-      --rin-canvas-rgb: 16 40 40;
-      --rin-surface-rgb: 31 49 50;
-      --hero-surface-top: rgba(16, 40, 40, 0.55);
-      --hero-surface-bottom: rgba(16, 40, 40, 0);
-      --hero-overlay-top: rgba(0, 0, 0, 0.75);
-      --hero-overlay-bottom: rgba(16, 40, 40, 0);
-    }
-
     .wauto {
       @apply w-full md:w-11/12 lg:w-10/12 xl:w-8/12 2xl:w-6/12 mx-auto duration-300;
     }
@@ -42,7 +43,7 @@
       height: var(--hero-height-mobile);
       overflow: hidden;
       pointer-events: none;
-      z-index: 1;
+      z-index: -10;
     }
 
     @media (min-width: 768px) {

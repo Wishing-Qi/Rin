@@ -186,7 +186,7 @@ export function UserAvatar({
                 setIsOpen(false);
                 setLocation("/profile");
               }}
-              className="mb-2 flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+              className="mb-2 flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-theme/10"
             >
               {profile.avatar ? (
                 <ImageWithFallback src={profile.avatar} alt={profile.name || t("profile.title")} className="h-10 w-10 rounded-full" />
@@ -206,7 +206,7 @@ export function UserAvatar({
                   setIsOpen(false);
                   setLocation("/admin/writing");
                 }}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm t-primary transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm t-primary transition-colors hover:bg-theme/10 hover:text-theme"
               >
                 <i className="ri-dashboard-line" />
                 <span>{t("admin.title")}</span>
@@ -219,7 +219,7 @@ export function UserAvatar({
                 removeAuthToken();
                 window.location.reload();
               }}
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-theme transition-colors hover:bg-theme/10"
             >
               <i className="ri-logout-circle-line" />
               <span>{t("logout")}</span>
