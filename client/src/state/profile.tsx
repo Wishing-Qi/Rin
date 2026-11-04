@@ -5,15 +5,6 @@ export type Profile = {
   avatar: string;
   permission: boolean;
   name: string;
-  apiKey?: string;
 }
 
-export type ProfileContextType = {
-  profile: Profile | undefined;
-  setProfile: (profile: Profile | undefined) => void;
-}
-
-export const ProfileContext = createContext<ProfileContextType>({
-  profile: undefined,
-  setProfile: () => { }
-});
+export const ProfileContext = createContext<Profile | undefined | null>(undefined);

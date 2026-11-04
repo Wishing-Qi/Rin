@@ -1,50 +1,39 @@
-import {useContext, useEffect, useRef, useState} from "react";
-import {Helmet} from "react-helmet";
-import {useTranslation} from "react-i18next";
-import ReactModal from "react-modal";
+import type { Feed } from "@rin/api";
+import { Modal } from "@rin/ui";
+import { useContext, useEffect, useRef, useState } from "react";
+import { Helmet } from "react-helmet";
+import { useTranslation } from "react-i18next";
 import Popup from "reactjs-popup";
-import {Link, useLocation} from "wouter";
-import {useAlert, useConfirm} from "../components/dialog";
-import {HashTag} from "../components/hashtag";
-import {Waiting} from "../components/loading";
-import {Markdown} from "../components/markdown";
-import {client} from "../main";
-import {ClientConfigContext} from "../state/config";
-import {ProfileContext} from "../state/profile";
-import {headersWithAuth} from "../utils/auth";
-import {siteName} from "../utils/constants";
-import {timeago} from "../utils/timeago";
-import {Button} from "../components/button";
-import {Tips} from "../components/tips";
-import {useLoginModal} from "../hooks/useLoginModal";
-import mermaid from "mermaid";
-import {AdjacentSection} from "../components/adjacent_feed.tsx";
+import { Link, useLocation } from "wouter";
+import { useAlert, useConfirm } from "../components/dialog";
+import { HashTag } from "../components/hashtag";
+import { ImageWithFallback } from "../components/image-with-fallback";
+import { Waiting } from "../components/loading";
+import { Markdown } from "../components/markdown";
+import { client } from "../app/runtime";
+import { ClientConfigContext } from "../state/config";
+import { ProfileContext } from "../state/profile";
+import { useSiteConfig } from "../hooks/useSiteConfig";
+import { siteName } from "../utils/constants";
+import { timeago } from "../utils/timeago";
+import { Button } from "../components/button";
+import { Tips } from "../components/tips";
+import { AdjacentSection } from "../components/adjacent_feed.tsx";
+import { stripImageUrlMetadata } from "../utils/image-upload";
 
-type Feed = {
-  id: number;
-  title: string | null;
-  content: string;
-  uid: number;
-  createdAt: Date;
-  updatedAt: Date;
-  hashtags: {
-    id: number;
-    name: string;
-  }[];
-  user: {
-    avatar: string | null;
-    id: number;
-    username: string;
-  };
-  pv: number;
-  uv: number;
-};
+function extractFirstMarkdownImageUrl(content: string) {
+  const match = /!\[.*?\]\((\S+?)(?:\s+"[^"]*")?\)/.exec(content);
+  if (!match) {
+    return undefined;
+  }
 
-
+  return stripImageUrlMetadata(match[1]);
+}
 
 export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Element, clean: (id: string) => void }) {
   const { t } = useTranslation();
-  const { profile } = useContext(ProfileContext);
+  const siteConfig = useSiteConfig();
+  const profile = useContext(ProfileContext);
   const [feed, setFeed] = useState<Feed>();
   const [error, setError] = useState<string>();
   const [headImage, setHeadImage] = useState<string>();
@@ -54,7 +43,10 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
   const { showConfirm, ConfirmUI } = useConfirm();
   const [top, setTop] = useState<number>(0);
   const config = useContext(ClientConfigContext);
-  const counterEnabled = config.get<boolean>('counter.enabled');
+  const counterEnabled = config.getBoolean('counter.enabled');
+  const hasAISummary = Boolean(feed?.ai_summary?.trim());
+  const showAISummaryState = feed?.ai_summary_status === "pending" || feed?.ai_summary_status === "processing" || feed?.ai_summary_status === "failed";
+  const hashtags = Array.isArray(feed?.hashtags) ? feed.hashtags : [];
   function deleteFeed() {
     // Confirm
     showConfirm(
@@ -62,11 +54,8 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
       t("article.delete.confirm"),
       () => {
         if (!feed) return;
-        client
-          .feed({ id: feed.id })
-          .delete(null, {
-            headers: headersWithAuth(),
-          })
+        client.feed
+          .delete(feed.id)
           .then(({ error }) => {
             if (error) {
               showAlert(error.value as string);
@@ -86,13 +75,8 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
       isUnTop ? t("article.top.confirm") : t("article.untop.confirm"),
       () => {
         if (!feed) return;
-        client
-          .feed.top({ id: feed.id })
-          .post({
-            top: topNew,
-          }, {
-            headers: headersWithAuth(),
-          })
+        client.feed
+          .setTop(feed.id, topNew)
           .then(({ error }) => {
             if (error) {
               showAlert(error.value as string);
@@ -108,23 +92,18 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
     setFeed(undefined);
     setError(undefined);
     setHeadImage(undefined);
-    client
-      .feed({ id })
-      .get({
-        headers: headersWithAuth(),
-      })
+    client.feed
+      .get(id)
       .then(({ data, error }) => {
         if (error) {
           setError(error.value as string);
         } else if (data && typeof data !== "string") {
           setTimeout(() => {
-            setFeed(data);
-            setTop(data.top);
-            // Extract head image
-            const img_reg = /!\[.*?\]\((.*?)\)/;
-            const img_match = img_reg.exec(data.content);
-            if (img_match) {
-              setHeadImage(img_match[1]);
+            setFeed(data as any);
+            setTop(data.top || 0);
+            const headImageUrl = extractFirstMarkdownImageUrl(data.content);
+            if (headImageUrl) {
+              setHeadImage(headImageUrl);
             }
             clean(id);
           }, 0);
@@ -132,56 +111,15 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
       });
     ref.current = id;
   }, [id]);
-  useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "default",
-      themeVariables: {
-        bg: '#f0fafa',
-        clusterBkg: '#7cbebf',
-        clusterBorder: '#4a9192',
-        clusterTextColor: '#0d1f1f',
-        mainBkg: '#f0fafa',
-        primaryColor: '#7cbebf',
-        mainBorderColor: '#4a9192',
-        edgeLabelColor: '#e0e0e0',
-        textColor: '#0d1f1f',
-      },
-    });
-    mermaid.run({
-      suppressErrors: true,
-      nodes: document.querySelectorAll("pre.mermaid_default")
-    }).then(()=>{
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: "dark",
-        themeVariables: {
-          bg: '#1c1c1e',
-          clusterBkg: '#8dd1d2',
-          clusterBorder: '#5ba9aa',
-          clusterTextColor: '#e0e0e0',
-          mainBkg: '#1c1c1e',
-          primaryColor: '#8dd1d2',
-          mainBorderColor: '#5ba9aa',
-          edgeLabelColor: '#e0e0e0',
-          textColor: '#e0e0e0',
-        },
-      });
-      mermaid.run({
-        suppressErrors: true,
-        nodes: document.querySelectorAll("pre.mermaid_dark")
-      });
-    })
-  }, [feed]);
 
   return (
     <Waiting for={feed || error}>
       {feed && (
         <Helmet>
-          <title>{`${feed.title ?? "Unnamed"} - ${process.env.NAME}`}</title>
+          <title>{`${feed.title ?? "Unnamed"} - ${siteConfig.name}`}</title>
           <meta property="og:site_name" content={siteName} />
           <meta property="og:title" content={feed.title ?? ""} />
-          <meta property="og:image" content={headImage ?? process.env.AVATAR} />
+          <meta property="og:image" content={headImage ?? siteConfig.avatar} />
           <meta property="og:type" content="article" />
           <meta property="og:url" content={document.URL} />
           <meta
@@ -195,7 +133,7 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
           <meta name="author" content={feed.user.username} />
           <meta
             name="keywords"
-            content={feed.hashtags.map(({ name }) => name).join(", ")}
+            content={hashtags.map(({ name }) => name).join(", ")}
           />
           <meta
             name="description"
@@ -283,7 +221,7 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
                         </button>
                         <Link
                           aria-label={t("edit")}
-                          href={`/writing/${feed.id}`}
+                          href={`/admin/writing/${feed.id}`}
                           className="flex-1 flex flex-col items-end justify-center px-2 py bg-secondary bg-button rounded-full transition"
                         >
                           <i className="ri-edit-2-line dark:text-neutral-400" />
@@ -299,35 +237,61 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
                     )}
                   </div>
                 </div>
+                {(hasAISummary || showAISummaryState) && (
+                  <div className="my-4 p-4 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-100 dark:border-purple-800/30">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <i className="ri-sparkling-2-fill text-purple-500" />
+                        <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                          {t('ai_summary.title')}
+                        </span>
+                      </div>
+                      {showAISummaryState ? (
+                        <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-medium text-purple-700 dark:bg-white/10 dark:text-purple-300">
+                          {t(`ai_summary.status.${feed.ai_summary_status}`)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed t-secondary [overflow-wrap:anywhere]">
+                      {hasAISummary ? feed.ai_summary : t(`ai_summary.message.${feed.ai_summary_status}`)}
+                    </p>
+                    {feed.ai_summary_status === "failed" && feed.ai_summary_error ? (
+                      <p className="mt-2 whitespace-pre-wrap text-xs text-rose-600 dark:text-rose-300 [overflow-wrap:anywhere]">
+                        {feed.ai_summary_error}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
                 <Markdown content={feed.content} />
                 <div className="mt-6 flex flex-col gap-2">
-                  {feed.hashtags.length > 0 && (
+                  {hashtags.length > 0 && (
                     <div className="flex flex-row flex-wrap gap-x-2">
-                      {feed.hashtags.map(({ name }, index) => (
+                      {hashtags.map(({ name }, index) => (
                         <HashTag key={index} name={name} />
                       ))}
                     </div>
                   )}
-                  <div className="flex flex-row items-center">
-                    <img
+                  <div className="flex min-w-0 flex-row items-center">
+                    <ImageWithFallback
                       src={feed.user.avatar || "/avatar.png"}
-                      className="w-8 h-8 rounded-full"
+                      alt={feed.user.username}
+                      className="h-8 w-8 rounded-full"
                     />
-                    <div className="ml-2">
-                      <span className="text-gray-400 text-sm cursor-default">
+                    <div className="ml-2 min-w-0">
+                      <span className="block truncate text-sm text-gray-400 cursor-default">
                         {feed.user.username}
                       </span>
                     </div>
                   </div>
                 </div>
               </article>
-              <AdjacentSection id={id} setError={setError}/>
+              {id !== "about" && <AdjacentSection id={id} setError={setError} />}
               {feed && <Comments id={`${feed.id}`} />}
               <div className="h-16" />
             </main>
             <div className="w-80 hidden lg:block relative">
               <div
-                  className={`start-0 end-0 top-[5.5rem] sticky`}
+                className={`start-0 end-0 top-[5.5rem] sticky`}
               >
                 <TOC />
               </div>
@@ -345,43 +309,24 @@ export function TOCHeader({ TOC }: { TOC: () => JSX.Element }) {
   const [isOpened, setIsOpened] = useState(false);
 
   return (
-    <div className="lg:hidden">
+    <div className="shrink-0 lg:hidden">
       <button
         onClick={() => setIsOpened(true)}
         className="w-10 h-10 rounded-full flex flex-row items-center justify-center"
       >
-        <i className="ri-menu-2-fill t-primary ri-lg"></i>
+        <i className="ri-menu-2-line text-neutral-500 transition-colors hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 ri-lg md:ri-sm md:t-secondary"></i>
       </button>
-      <ReactModal
+      <Modal
         isOpen={isOpened}
-        style={{
-          content: {
-            top: "50%",
-            left: "50%",
-            right: "auto",
-            bottom: "auto",
-            marginRight: "-50%",
-            transform: "translate(-50%, -50%)",
-            padding: "0",
-            border: "none",
-            borderRadius: "16px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            background: "none",
-          },
-          overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            zIndex: 1000,
-          },
-        }}
         onRequestClose={() => setIsOpened(false)}
+        contentLabel="Table of contents"
+        size="lg"
+        panelClassName="p-4"
       >
-        <div className="w-[80vw] sm:w-[60vw] lg:w-[40vw] overflow-clip relative t-primary">
+        <div className="relative max-h-[75vh] overflow-auto t-primary">
           <TOC />
         </div>
-      </ReactModal>
+      </Modal>
     </div>
   );
 }
@@ -395,42 +340,70 @@ function CommentInput({
 }) {
   const { t } = useTranslation();
   const [content, setContent] = useState("");
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestWebsite, setGuestWebsite] = useState("");
   const [error, setError] = useState("");
   const { showAlert, AlertUI } = useAlert();
-  const { profile } = useContext(ProfileContext);
-  const { LoginModal, setIsOpened } = useLoginModal()
+  const profile = useContext(ProfileContext);
+  const [, setLocation] = useLocation();
+  const config = useContext(ClientConfigContext);
+  // guest comments enabled by default; admin can disable via client config `comment.guest.enabled=false`
+  const rawGuest = config.get('comment.guest.enabled');
+  const guestEnabled = rawGuest !== false && rawGuest !== 'false';
   function errorHumanize(error: string) {
     if (error === "Unauthorized") return t("login.required");
     else if (error === "Content is required") return t("comment.empty");
+    else if (error === "Guest name is required") return t("comment.guest_name_required");
     return error;
   }
   function submit() {
-    if (!profile) {
-      setIsOpened(true)
-      return;
+    if (profile) {
+      client.comment
+        .create(parseInt(id), { content })
+        .then(({ error }) => {
+          if (error) {
+            setError(errorHumanize(error.value as string));
+          } else {
+            setContent("");
+            setError("");
+            showAlert(t("comment.success"), () => {
+              onRefresh();
+            });
+          }
+        });
+    } else if (guestEnabled) {
+      if (!guestName.trim()) {
+        setError(t("comment.guest_name_required"));
+        return;
+      }
+      client.comment
+        .create(parseInt(id), {
+          content,
+          guestName: guestName.trim(),
+          guestEmail: guestEmail.trim() || undefined,
+          guestWebsite: guestWebsite.trim() || undefined,
+        })
+        .then(({ error }) => {
+          if (error) {
+            setError(errorHumanize(error.value as string));
+          } else {
+            setContent("");
+            setGuestName("");
+            setGuestEmail("");
+            setGuestWebsite("");
+            setError("");
+            showAlert(t("comment.success"), () => {
+              onRefresh();
+            });
+          }
+        });
+    } else {
+      setLocation('/login');
     }
-    client.feed
-      .comment({ feed: id })
-      .post(
-        { content },
-        {
-          headers: headersWithAuth(),
-        }
-      )
-      .then(({ error }) => {
-        if (error) {
-          setError(errorHumanize(error.value as string));
-        } else {
-          setContent("");
-          setError("");
-          showAlert(t("comment.success"), () => {
-            onRefresh();
-          });
-        }
-      });
   }
   return (
-      <div className="w-full rounded-2xl bg-w t-primary p-6 items-end flex flex-col">
+    <div className="w-full rounded-2xl bg-w t-primary p-6 items-end flex flex-col">
       <div className="flex flex-col w-full items-start mb-4">
         <label htmlFor="comment">{t("comment.title")}</label>
       </div>
@@ -448,11 +421,46 @@ function CommentInput({
         >
           {t("comment.submit")}
         </button>
+      </>) : guestEnabled ? (<>
+        <input
+          type="text"
+          placeholder={t("comment.guest_name_placeholder")}
+          className="bg-w w-full rounded-lg px-3 py-2 mb-2 border border-gray-200 dark:border-gray-700"
+          value={guestName}
+          onChange={(e) => setGuestName(e.target.value)}
+        />
+        <input
+          type="email"
+          placeholder={t("comment.guest_email_placeholder")}
+          className="bg-w w-full rounded-lg px-3 py-2 mb-2 border border-gray-200 dark:border-gray-700"
+          value={guestEmail}
+          onChange={(e) => setGuestEmail(e.target.value)}
+        />
+        <input
+          type="url"
+          placeholder={t("comment.guest_website_placeholder")}
+          className="bg-w w-full rounded-lg px-3 py-2 mb-2 border border-gray-200 dark:border-gray-700"
+          value={guestWebsite}
+          onChange={(e) => setGuestWebsite(e.target.value)}
+        />
+        <textarea
+          id="comment"
+          placeholder={t("comment.placeholder.title")}
+          className="bg-w w-full h-24 rounded-lg"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+        />
+        <button
+          className="mt-4 bg-theme text-white px-4 py-2 rounded-full"
+          onClick={submit}
+        >
+          {t("comment.submit")}
+        </button>
       </>) : (
         <div className="flex flex-row w-full items-center justify-center space-x-2 py-12">
           <button
             className="mt-2 bg-theme text-white px-4 py-2 rounded-full"
-            onClick={() => setIsOpened(true)}
+            onClick={() => setLocation('/login')}
           >
             {t("login.required")}
           </button>
@@ -460,7 +468,6 @@ function CommentInput({
       )}
       {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
       <AlertUI />
-      <LoginModal />
     </div>
   );
 }
@@ -470,12 +477,15 @@ type Comment = {
   content: string;
   createdAt: Date;
   updatedAt: Date;
-  user: {
+  user?: {
     id: number;
     username: string;
     avatar: string | null;
     permission: number | null;
-  };
+  } | null;
+  guestName?: string;
+  guestEmail?: string;
+  guestWebsite?: string;
 };
 
 function Comments({ id }: { id: string }) {
@@ -486,16 +496,13 @@ function Comments({ id }: { id: string }) {
   const { t } = useTranslation();
 
   function loadComments() {
-    client.feed
-      .comment({ feed: id })
-      .get({
-        headers: headersWithAuth(),
-      })
+    client.comment
+      .list(parseInt(id))
       .then(({ data, error }) => {
         if (error) {
           setError(error.value as string);
         } else if (data && Array.isArray(data)) {
-          setComments(data);
+          setComments(data as any);
         }
       });
   }
@@ -506,7 +513,7 @@ function Comments({ id }: { id: string }) {
   }, [id]);
   return (
     <>
-      {config.get<boolean>('comment.enabled') &&
+      {config.getBoolean('comment.enabled') &&
         <div className="m-2 flex flex-col justify-center items-center">
           <CommentInput id={id} onRefresh={loadComments} />
           {error && (
@@ -549,17 +556,16 @@ function CommentItem({
   const { showConfirm, ConfirmUI } = useConfirm();
   const { showAlert, AlertUI } = useAlert();
   const { t } = useTranslation();
-  const { profile } = useContext(ProfileContext);
+  const profile = useContext(ProfileContext);
+  const commenterName = comment.user?.username || comment.guestName || t("anonymous");
+  const commenterAvatar = comment.user?.avatar || "/avatar.png";
   function deleteComment() {
     showConfirm(
       t("delete.comment.title"),
       t("delete.comment.confirm"),
       async () => {
-        client
-          .comment({ id: comment.id })
-          .delete(null, {
-            headers: headersWithAuth(),
-          })
+        client.comment
+          .delete(comment.id)
           .then(({ error }) => {
             if (error) {
               showAlert(error.value as string);
@@ -573,26 +579,37 @@ function CommentItem({
   }
   return (
     <div className="flex flex-row items-start rounded-xl mt-2">
-      <img
-        src={comment.user.avatar || ""}
-        className="w-8 h-8 rounded-full mt-4"
+      <ImageWithFallback
+        src={commenterAvatar}
+        alt={commenterName}
+        className="mt-4 h-8 w-8 rounded-full"
       />
       <div className="flex flex-col flex-1 w-0 ml-2 bg-w rounded-xl p-4">
-        <div className="flex flex-row">
-          <span className="t-primary text-base font-bold">
-            {comment.user.username}
+        <div className="flex min-w-0 flex-row items-center gap-2">
+          <span className="min-w-0 truncate text-base font-bold t-primary">
+            {commenterName}
           </span>
+          {comment.guestWebsite && (
+            <a
+              href={comment.guestWebsite}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 text-gray-400 transition-colors hover:text-theme"
+            >
+              <i className="ri-external-link-line"></i>
+            </a>
+          )}
           <div className="flex-1 w-0" />
           <span
             title={new Date(comment.createdAt).toLocaleString()}
-            className="text-gray-400 text-sm"
+            className="shrink-0 text-sm text-gray-400"
           >
             {timeago(comment.createdAt)}
           </span>
         </div>
-        <p className="t-primary break-words">{comment.content}</p>
+        <p className="break-words t-primary [overflow-wrap:anywhere]">{comment.content}</p>
         <div className="flex flex-row justify-end">
-          {(profile?.permission || profile?.id == comment.user.id) && (
+          {(profile?.permission || (comment.user && profile?.id == comment.user.id)) && (
             <Popup
               arrow={false}
               trigger={

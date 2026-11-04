@@ -1,316 +1,322 @@
 import { and, desc, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import Elysia from "elysia";
-import * as schema from "../db/schema";
-import { feeds, hashtags, users, feedHashtags } from "../db/schema";
+import { Hono } from "hono";
+import type { AppContext, DB } from "../core/hono-types";
+import { feedHashtags, feeds, hashtags, users } from "../db/schema";
+import { putStorageObject } from "../utils/storage";
 import { jsonToXmlrpcFault, jsonToXmlrpcResponse, xmlrpcToJSON } from "../utils/xmlrpc";
-import { getEnv } from "../utils/di";
-import { createS3Client } from "../utils/s3";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import path from "node:path";
-import { PublicCache } from "../utils/cache";
+import { clearFeedCache, clearFeedCollectionCaches } from "./clear-feed-cache";
+import { getUserApiKey } from "./custom-admin";
 
-export function MetaWeblogService() {
-    const env = getEnv();
+function buf2hex(buffer: ArrayBuffer) {
+    return Array.from(new Uint8Array(buffer))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+}
 
-    async function validateUser(db: any, username: string, apiKey: string) {
+function getExtname(filename: string) {
+    const idx = filename.lastIndexOf(".");
+    return idx >= 0 ? filename.slice(idx) : "";
+}
+
+export function MetaWeblogService(): Hono {
+    const app = new Hono();
+
+    async function validateUser(db: DB, username: string, apiKey: string) {
         const user = await db.query.users.findFirst({
-            where: eq(users.username, username)
+            where: eq(users.username, username),
         });
-        if (!user || user.apiKey !== apiKey || user.permission !== 1) {
+        if (!user || user.permission !== 1 || !apiKey) {
+            return null;
+        }
+        const storedKey = await getUserApiKey(db, user.id);
+        if (!storedKey || storedKey !== apiKey) {
             return null;
         }
         return user;
     }
 
-    return new Elysia({ aot: false, prefix: '/api' })
-        .onParse(({ request }, contentType) => {
-            if (contentType === 'text/xml' || contentType === 'application/xml') {
-                return request.text();
-            }
-        })
-        .get('/xmlrpc', () => "Hello")
-        .post('/xmlrpc', async ({ body, set, request }) => {
-            set.headers['Content-Type'] = 'text/xml';
+    app.get("/", (c) => c.text("Hello"));
 
+    app.post("/", async (c: AppContext) => {
+        const db = c.get("db");
+        const env = c.get("env");
+        const cache = c.get("cache");
+        const origin = new URL(c.req.url).origin;
+        const frontendUrl = env.FRONTEND_URL || origin;
+
+        const xmlReply = (body: string) =>
+            new Response(body, {
+                status: 200,
+                headers: { "Content-Type": "text/xml; charset=utf-8" },
+            });
+
+        try {
+            let xml: string;
             try {
-                // Step 1: 获取 body
-                let xml: string;
-                try {
-                    if (typeof body === 'string') {
-                        xml = body;
-                    } else if (body instanceof ArrayBuffer) {
-                        xml = new TextDecoder().decode(body);
-                    } else if (body && typeof body === 'object' && typeof (body as any).text === 'function') {
-                        xml = await (body as any).text();
-                    } else {
-                        // 最后的回退：从原始 request 读取
-                        xml = await request.text();
-                    }
-                } catch (bodyErr: any) {
-                    return jsonToXmlrpcFault(500, `Body parse error: ${bodyErr.message}`);
-                }
-                
-                if (!xml || xml.trim() === "") {
-                    return jsonToXmlrpcFault(400, "Empty request body");
-                }
-                
-                // Step 2: 解析 XML
-                let methodName: string;
-                let params: any[];
-                try {
-                    const parsed = xmlrpcToJSON(xml);
-                    methodName = parsed.methodName;
-                    params = parsed.params;
-                } catch (parseErr: any) {
-                    return jsonToXmlrpcFault(400, `XML parse error: ${parseErr.message}`);
-                }
-                
-                const db = drizzle(env.DB, { schema });
+                xml = await c.req.text();
+            } catch (bodyErr: any) {
+                return xmlReply(jsonToXmlrpcFault(500, `Body parse error: ${bodyErr.message}`));
+            }
 
-                // 1. blogger.getUsersBlogs(appkey, username, password)
-                if (methodName === 'blogger.getUsersBlogs') {
-                    const [_appkey, username, apiKey] = params;
-                    const user = await validateUser(db, username, apiKey);
-                    if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
+            if (!xml || xml.trim() === "") {
+                return xmlReply(jsonToXmlrpcFault(400, "Empty request body"));
+            }
 
-                    return jsonToXmlrpcResponse([{
-                        blogid: "1",
-                        blogName: user.username,
-                        url: env.FRONTEND_URL || "https://example.com",
-                        isAdmin: true
-                    }]);
-                }
+            let methodName: string;
+            let params: any[];
+            try {
+                const parsed = xmlrpcToJSON(xml);
+                methodName = parsed.methodName;
+                params = parsed.params;
+            } catch (parseErr: any) {
+                return xmlReply(jsonToXmlrpcFault(400, `XML parse error: ${parseErr.message}`));
+            }
 
-                // 2. metaWeblog.getRecentPosts(blogid, username, password, numberOfPosts)
-                if (methodName === 'metaWeblog.getRecentPosts') {
-                    const [_blogid, username, apiKey, numberOfPosts] = params;
-                    const user = await validateUser(db, username, apiKey);
-                    if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
+            // 1. blogger.getUsersBlogs(appkey, username, password)
+            if (methodName === "blogger.getUsersBlogs") {
+                const [_appkey, username, apiKey] = params;
+                const user = await validateUser(db, username, apiKey);
+                if (!user) return xmlReply(jsonToXmlrpcFault(403, "Invalid username or API Key"));
 
-                    const posts = await db.query.feeds.findMany({
-                        where: eq(feeds.uid, user.id),
-                        orderBy: [desc(feeds.createdAt)],
-                        limit: numberOfPosts || 10,
-                        with: {
-                            hashtags: {
-                                with: { hashtag: true }
-                            }
-                        }
-                    });
+                return xmlReply(
+                    jsonToXmlrpcResponse([
+                        {
+                            blogid: "1",
+                            blogName: user.username,
+                            url: frontendUrl,
+                            isAdmin: true,
+                        },
+                    ]),
+                );
+            }
 
-                    return jsonToXmlrpcResponse(posts.map((p: any) => ({
-                        postid: p.id.toString(),
-                        title: p.title || "",
-                        description: p.content,
-                        link: `${env.FRONTEND_URL}/feed/${p.id}`,
-                        dateCreated: p.createdAt,
-                        categories: p.hashtags.map((h: any) => h.hashtag.name),
-                        publish: p.draft === 0
-                    })));
-                }
+            // 2. metaWeblog.getRecentPosts(blogid, username, password, numberOfPosts)
+            if (methodName === "metaWeblog.getRecentPosts") {
+                const [_blogid, username, apiKey, numberOfPosts] = params;
+                const user = await validateUser(db, username, apiKey);
+                if (!user) return xmlReply(jsonToXmlrpcFault(403, "Invalid username or API Key"));
 
-                // 3. metaWeblog.getPost(postid, username, password)
-                if (methodName === 'metaWeblog.getPost') {
-                    const [postId, username, apiKey] = params;
-                    const user = await validateUser(db, username, apiKey);
-                    if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
+                const posts = await db.query.feeds.findMany({
+                    where: eq(feeds.uid, user.id),
+                    orderBy: [desc(feeds.createdAt)],
+                    limit: numberOfPosts || 10,
+                    with: {
+                        hashtags: {
+                            with: { hashtag: true },
+                        },
+                    },
+                });
 
-                    const post = await db.query.feeds.findFirst({
-                        where: and(eq(feeds.id, parseInt(postId)), eq(feeds.uid, user.id)),
-                        with: {
-                            hashtags: {
-                                with: { hashtag: true }
-                            }
-                        }
-                    });
+                return xmlReply(
+                    jsonToXmlrpcResponse(
+                        posts.map((p: any) => ({
+                            postid: p.id.toString(),
+                            title: p.title || "",
+                            description: p.content,
+                            link: `${frontendUrl}/feed/${p.id}`,
+                            dateCreated: p.createdAt,
+                            categories: p.hashtags.map((h: any) => h.hashtag.name),
+                            publish: p.draft === 0,
+                        })),
+                    ),
+                );
+            }
 
-                    if (!post) return jsonToXmlrpcFault(404, "Post not found");
+            // 3. metaWeblog.getPost(postid, username, password)
+            if (methodName === "metaWeblog.getPost") {
+                const [postId, username, apiKey] = params;
+                const user = await validateUser(db, username, apiKey);
+                if (!user) return xmlReply(jsonToXmlrpcFault(403, "Invalid username or API Key"));
 
-                    return jsonToXmlrpcResponse({
+                const post = await db.query.feeds.findFirst({
+                    where: and(eq(feeds.id, parseInt(postId)), eq(feeds.uid, user.id)),
+                    with: {
+                        hashtags: {
+                            with: { hashtag: true },
+                        },
+                    },
+                });
+
+                if (!post) return xmlReply(jsonToXmlrpcFault(404, "Post not found"));
+
+                return xmlReply(
+                    jsonToXmlrpcResponse({
                         postid: post.id.toString(),
                         title: post.title || "",
                         description: post.content,
-                        link: `${env.FRONTEND_URL}/feed/${post.id}`,
+                        link: `${frontendUrl}/feed/${post.id}`,
                         dateCreated: post.createdAt,
                         categories: post.hashtags.map((h: any) => h.hashtag.name),
-                        publish: post.draft === 0
-                    });
-                }
+                        publish: post.draft === 0,
+                    }),
+                );
+            }
 
-                // 4. metaWeblog.newPost(blogid, username, password, post, publish)
-                if (methodName === 'metaWeblog.newPost') {
-                    const [_blogid, username, apiKey, postData, publish] = params;
-                    const user = await validateUser(db, username, apiKey);
-                    if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
+            // 4. metaWeblog.newPost(blogid, username, password, post, publish)
+            if (methodName === "metaWeblog.newPost") {
+                const [_blogid, username, apiKey, postData, publish] = params;
+                const user = await validateUser(db, username, apiKey);
+                if (!user) return xmlReply(jsonToXmlrpcFault(403, "Invalid username or API Key"));
 
-                    const result = await db.insert(feeds).values({
+                const result = await db
+                    .insert(feeds)
+                    .values({
                         title: postData.title,
                         content: postData.description,
                         uid: user.id,
                         draft: publish ? 0 : 1,
                         listed: 1,
-                        summary: postData.description.substring(0, 200)
-                    }).returning({ insertedId: feeds.id });
+                        summary: postData.description.substring(0, 200),
+                    })
+                    .returning({ insertedId: feeds.id });
 
-                    if (!result || !result[0]) {
-                        return jsonToXmlrpcFault(500, "Failed to create post");
-                    }
-
-                    const newPostId = result[0].insertedId;
-
-                    // Handle categories (tags)
-                    if (postData.categories && Array.isArray(postData.categories)) {
-                        for (const catName of postData.categories) {
-                            let tagId: number;
-                            const existingTag = await db.query.hashtags.findFirst({ where: eq(hashtags.name, catName) });
-                            if (!existingTag) {
-                                const tagResult = await db.insert(hashtags).values({ name: catName }).returning({ id: hashtags.id });
-                                tagId = tagResult[0].id;
-                            } else {
-                                tagId = existingTag.id;
-                            }
-                            await db.insert(feedHashtags).values({ feedId: newPostId, hashtagId: tagId });
-                        }
-                    }
-
-                    await PublicCache().deletePrefix('feeds_');
-                    return jsonToXmlrpcResponse(newPostId.toString());
+                if (!result || !result[0]) {
+                    return xmlReply(jsonToXmlrpcFault(500, "Failed to create post"));
                 }
 
-                // 5. metaWeblog.editPost(postid, username, password, post, publish)
-                if (methodName === 'metaWeblog.editPost') {
-                    const [postId, username, apiKey, postData, publish] = params;
-                    const user = await validateUser(db, username, apiKey);
-                    if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
+                const newPostId = result[0].insertedId;
 
-                    const feedId = parseInt(postId);
-                    const existingFeed = await db.query.feeds.findFirst({
-                        where: and(eq(feeds.id, feedId), eq(feeds.uid, user.id)),
-                        columns: { alias: true }
-                    });
+                if (postData.categories && Array.isArray(postData.categories)) {
+                    for (const catName of postData.categories) {
+                        let tagId: number;
+                        const existingTag = await db.query.hashtags.findFirst({
+                            where: eq(hashtags.name, catName),
+                        });
+                        if (!existingTag) {
+                            const tagResult = await db
+                                .insert(hashtags)
+                                .values({ name: catName })
+                                .returning({ id: hashtags.id });
+                            tagId = tagResult[0].id;
+                        } else {
+                            tagId = existingTag.id;
+                        }
+                        await db.insert(feedHashtags).values({ feedId: newPostId, hashtagId: tagId });
+                    }
+                }
 
-                    await db.update(feeds).set({
+                await clearFeedCollectionCaches(cache);
+                return xmlReply(jsonToXmlrpcResponse(newPostId.toString()));
+            }
+
+            // 5. metaWeblog.editPost(postid, username, password, post, publish)
+            if (methodName === "metaWeblog.editPost") {
+                const [postId, username, apiKey, postData, publish] = params;
+                const user = await validateUser(db, username, apiKey);
+                if (!user) return xmlReply(jsonToXmlrpcFault(403, "Invalid username or API Key"));
+
+                const feedId = parseInt(postId);
+                const existingFeed = await db.query.feeds.findFirst({
+                    where: and(eq(feeds.id, feedId), eq(feeds.uid, user.id)),
+                    columns: { alias: true },
+                });
+
+                await db
+                    .update(feeds)
+                    .set({
                         title: postData.title,
                         content: postData.description,
                         draft: publish ? 0 : 1,
                         updatedAt: new Date(),
-                        summary: postData.description.substring(0, 200)
-                    }).where(and(eq(feeds.id, feedId), eq(feeds.uid, user.id)));
+                        summary: postData.description.substring(0, 200),
+                    })
+                    .where(and(eq(feeds.id, feedId), eq(feeds.uid, user.id)));
 
-                    // Update categories (simple approach: clear and re-add)
-                    await db.delete(feedHashtags).where(eq(feedHashtags.feedId, feedId));
-                    if (postData.categories && Array.isArray(postData.categories)) {
-                        for (const catName of postData.categories) {
-                            let tagId: number;
-                            const existingTag = await db.query.hashtags.findFirst({ where: eq(hashtags.name, catName) });
-                            if (!existingTag) {
-                                const tagResult = await db.insert(hashtags).values({ name: catName }).returning({ id: hashtags.id });
-                                tagId = tagResult[0].id;
-                            } else {
-                                tagId = existingTag.id;
-                            }
-                            await db.insert(feedHashtags).values({ feedId: feedId, hashtagId: tagId });
+                await db.delete(feedHashtags).where(eq(feedHashtags.feedId, feedId));
+                if (postData.categories && Array.isArray(postData.categories)) {
+                    for (const catName of postData.categories) {
+                        let tagId: number;
+                        const existingTag = await db.query.hashtags.findFirst({
+                            where: eq(hashtags.name, catName),
+                        });
+                        if (!existingTag) {
+                            const tagResult = await db
+                                .insert(hashtags)
+                                .values({ name: catName })
+                                .returning({ id: hashtags.id });
+                            tagId = tagResult[0].id;
+                        } else {
+                            tagId = existingTag.id;
                         }
+                        await db.insert(feedHashtags).values({ feedId, hashtagId: tagId });
                     }
-
-                    const cache = PublicCache();
-                    await cache.deletePrefix('feeds_');
-                    await cache.deletePrefix('search_');
-                    await cache.delete(`feed_${feedId}`, false);
-                    await cache.deletePrefix(`${feedId}_previous_feed`);
-                    await cache.deletePrefix(`${feedId}_next_feed`);
-                    if (existingFeed?.alias) {
-                        await cache.delete(`feed_${existingFeed.alias}`, false);
-                    }
-
-                    return jsonToXmlrpcResponse(true);
                 }
 
-                // 6. blogger.deletePost(appkey, postid, username, password, publish)
-                // Note: MetaWeblog sometimes uses blogger.deletePost or metaWeblog.deletePost
-                if (methodName === 'blogger.deletePost' || methodName === 'metaWeblog.deletePost') {
-                    const [_appkey, postId, username, apiKey] = params;
-                    const user = await validateUser(db, username, apiKey);
-                    if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
-
-                    const feedId = parseInt(postId);
-                    const existingFeed = await db.query.feeds.findFirst({
-                        where: and(eq(feeds.id, feedId), eq(feeds.uid, user.id)),
-                        columns: { alias: true }
-                    });
-
-                    await db.delete(feeds).where(and(eq(feeds.id, feedId), eq(feeds.uid, user.id)));
-
-                    const cache = PublicCache();
-                    await cache.deletePrefix('feeds_');
-                    await cache.deletePrefix('search_');
-                    await cache.delete(`feed_${feedId}`, false);
-                    await cache.deletePrefix(`${feedId}_previous_feed`);
-                    await cache.deletePrefix(`${feedId}_next_feed`);
-                    if (existingFeed?.alias) {
-                        await cache.delete(`feed_${existingFeed.alias}`, false);
-                    }
-
-                    return jsonToXmlrpcResponse(true);
-                }
-
-                // 7. metaWeblog.newMediaObject(blogid, username, password, mediaObject)
-                if (methodName === 'metaWeblog.newMediaObject') {
-                    const [_blogid, username, apiKey, mediaObject] = params;
-                    const user = await validateUser(db, username, apiKey);
-                    if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
-
-                    const { name, bits, type } = mediaObject;
-                    if (!bits) return jsonToXmlrpcFault(400, "Missing file bits");
-
-                    const s3 = createS3Client();
-                    const bucket = env.S3_BUCKET;
-                    const folder = env.S3_FOLDER || '';
-                    const accessHost = env.S3_ACCESS_HOST || env.S3_ENDPOINT;
-                    
-                    // Decode base64
-                    const buffer = Buffer.from(bits, 'base64');
-                    const suffix = path.extname(name);
-                    
-                    const hashArray = await crypto.subtle.digest({ name: 'SHA-1' }, buffer);
-                    const hash = Array.from(new Uint8Array(hashArray)).map(b => b.toString(16).padStart(2, '0')).join('');
-                    const key = path.join(folder, `${hash}${suffix}`).replace(/\\/g, '/');
-
-                    await s3.send(new PutObjectCommand({ 
-                        Bucket: bucket, 
-                        Key: key, 
-                        Body: buffer, 
-                        ContentType: type 
-                    }));
-
-                    return jsonToXmlrpcResponse({
-                        url: `${accessHost.startsWith('http') ? '' : 'https://'}${accessHost}/${key}`
-                    });
-                }
-
-                // 8. wp.getCategories(blogid, username, password)
-                if (methodName === 'wp.getCategories' || methodName === 'metaWeblog.getCategories') {
-                    const [_blogid, username, apiKey] = params;
-                    const user = await validateUser(db, username, apiKey);
-                    if (!user) return jsonToXmlrpcFault(403, "Invalid username or API Key");
-
-                    const tags = await db.query.hashtags.findMany();
-                    return jsonToXmlrpcResponse(tags.map(t => ({
-                        description: t.name,
-                        categoryName: t.name,
-                        htmlUrl: `${env.FRONTEND_URL}/hashtag/${t.id}`,
-                        rssUrl: ""
-                    })));
-                }
-
-                return jsonToXmlrpcFault(404, `Method ${methodName} not implemented`);
-
-            } catch (e: any) {
-                // 输出完整的错误堆栈到 Cloudflare Workers 日志
-                console.error('[MetaWeblog Error]', e);
-                console.error('[MetaWeblog Stack]', e.stack);
-                return jsonToXmlrpcFault(500, `Error: ${e.message}`);
+                await clearFeedCache(cache, feedId, existingFeed?.alias ?? null, existingFeed?.alias ?? null);
+                return xmlReply(jsonToXmlrpcResponse(true));
             }
-        });
+
+            // 6. blogger.deletePost / metaWeblog.deletePost
+            if (methodName === "blogger.deletePost" || methodName === "metaWeblog.deletePost") {
+                const [_appkey, postId, username, apiKey] = params;
+                const user = await validateUser(db, username, apiKey);
+                if (!user) return xmlReply(jsonToXmlrpcFault(403, "Invalid username or API Key"));
+
+                const feedId = parseInt(postId);
+                const existingFeed = await db.query.feeds.findFirst({
+                    where: and(eq(feeds.id, feedId), eq(feeds.uid, user.id)),
+                    columns: { alias: true },
+                });
+
+                await db.delete(feeds).where(and(eq(feeds.id, feedId), eq(feeds.uid, user.id)));
+                await clearFeedCache(cache, feedId, existingFeed?.alias ?? null, null);
+
+                return xmlReply(jsonToXmlrpcResponse(true));
+            }
+
+            // 7. metaWeblog.newMediaObject(blogid, username, password, mediaObject)
+            if (methodName === "metaWeblog.newMediaObject") {
+                const [_blogid, username, apiKey, mediaObject] = params;
+                const user = await validateUser(db, username, apiKey);
+                if (!user) return xmlReply(jsonToXmlrpcFault(403, "Invalid username or API Key"));
+
+                const { name, bits, type } = mediaObject;
+                if (!bits) return xmlReply(jsonToXmlrpcFault(400, "Missing file bits"));
+
+                const binaryString = atob(bits);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                const suffix = getExtname(name || "");
+                const hashArray = await crypto.subtle.digest({ name: "SHA-1" }, bytes.buffer);
+                const hash = buf2hex(hashArray);
+                const key = `${hash}${suffix}`;
+
+                const uploaded = await putStorageObject(env, key, bytes, type, origin);
+                return xmlReply(
+                    jsonToXmlrpcResponse({
+                        url: uploaded.url,
+                    }),
+                );
+            }
+
+            // 8. wp.getCategories / metaWeblog.getCategories
+            if (methodName === "wp.getCategories" || methodName === "metaWeblog.getCategories") {
+                const [_blogid, username, apiKey] = params;
+                const user = await validateUser(db, username, apiKey);
+                if (!user) return xmlReply(jsonToXmlrpcFault(403, "Invalid username or API Key"));
+
+                const tags = await db.query.hashtags.findMany();
+                return xmlReply(
+                    jsonToXmlrpcResponse(
+                        tags.map((t) => ({
+                            description: t.name,
+                            categoryName: t.name,
+                            htmlUrl: `${frontendUrl}/hashtag/${t.id}`,
+                            rssUrl: "",
+                        })),
+                    ),
+                );
+            }
+
+            return xmlReply(jsonToXmlrpcFault(404, `Method ${methodName} not implemented`));
+        } catch (e: any) {
+            console.error("[MetaWeblog Error]", e);
+            return xmlReply(jsonToXmlrpcFault(500, `Error: ${e.message}`));
+        }
+    });
+
+    return app;
 }

@@ -2,8 +2,8 @@ import {useEffect, useRef, useState} from "react"
 import {Helmet} from 'react-helmet'
 import {Link} from "wouter"
 import {Waiting} from "../components/loading"
-import {client} from "../main"
-import {headersWithAuth} from "../utils/auth"
+import { client } from "../app/runtime"
+import {useSiteConfig} from "../hooks/useSiteConfig";
 import {siteName} from "../utils/constants"
 import {useTranslation} from "react-i18next";
 
@@ -18,25 +18,24 @@ export function TimelinePage() {
     const [length, setLength] = useState(0)
     const ref = useRef(false)
     const { t } = useTranslation()
+    const siteConfig = useSiteConfig();
     function fetchFeeds() {
-        client.feed.timeline.get({
-            headers: headersWithAuth()
-        })
+        client.feed.timeline()
         .then(({ data }) => {
-            if (data && typeof data !== 'string') {
+            if (data) {
                 const arr = Array.isArray(data) ? data : []
                 setLength(arr.length)
                 // 兼容的分组逻辑
                 const groups = (Object.groupBy
                     ? Object.groupBy(arr, ({ createdAt }) => new Date(createdAt).getFullYear())
-                    : arr.reduce<Record<number, FeedItem[]>>((acc, item) => {
+                    : arr.reduce<Record<number, any[]>>((acc, item) => {
                         const key = new Date(item.createdAt).getFullYear()
                         ;(acc[key] ||= []).push(item)
                         return acc
                     }, {})
                 )
 
-                setFeeds(groups)
+                setFeeds(groups as any)
             }
         })
         .catch(err => {
@@ -52,10 +51,10 @@ export function TimelinePage() {
     return (
         <>
             <Helmet>
-                <title>{`${t('timeline')} - ${process.env.NAME}`}</title>
+                <title>{`${t('timeline')} - ${siteConfig.name}`}</title>
                 <meta property="og:site_name" content={siteName} />
                 <meta property="og:title" content={t('timeline')} />
-                <meta property="og:image" content={process.env.AVATAR} />
+                <meta property="og:image" content={siteConfig.avatar} />
                 <meta property="og:type" content="article" />
                 <meta property="og:url" content={document.URL} />
             </Helmet>
@@ -98,15 +97,15 @@ export function TimelinePage() {
 export function FeedItem({ id, title, createdAt }: { id: string, title: string, createdAt: Date }) {
     const formatter = new Intl.DateTimeFormat('en-US', { day: '2-digit', month: '2-digit' });
     return (
-        <div className="flex flex-row pl-8">
-            <div className="flex flex-row items-center">
+        <div className="flex min-w-0 flex-row pl-8">
+            <div className="flex shrink-0 flex-row items-center">
                 <div className="w-2 h-2 bg-theme rounded-full"></div>
             </div>
-            <div className="flex-1 rounded-2xl m-2 duration-300 flex flex-row items-center space-x-4   ">
-                <span className="t-secondary text-sm" title={new Date(createdAt).toLocaleString()}>
+            <div className="m-2 flex min-w-0 flex-1 flex-row items-center space-x-4 rounded-2xl duration-300">
+                <span className="shrink-0 text-sm t-secondary" title={new Date(createdAt).toLocaleString()}>
                     {formatter.format(new Date(createdAt))}
                 </span>
-                <Link href={`/feed/${id}`} target="_blank" className="text-base t-primary hover:text-theme text-pretty overflow-hidden">
+                <Link href={`/feed/${id}`} target="_blank" rel="noopener noreferrer" className="min-w-0 break-words text-base t-primary hover:text-theme text-pretty [overflow-wrap:anywhere]">
                     {title}
                 </Link>
             </div>

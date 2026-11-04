@@ -1,14 +1,15 @@
+import { Modal } from "@rin/ui"
 import { useContext, useEffect, useRef, useState } from "react"
 import { Helmet } from 'react-helmet'
-import { client } from "../main"
-import { headersWithAuth } from "../utils/auth"
+import { client } from "../app/runtime"
+
+import { useSiteConfig } from "../hooks/useSiteConfig";
 import { siteName } from "../utils/constants"
 import { useTranslation } from "react-i18next"
 import { ProfileContext } from "../state/profile"
 import { tryInt } from "../utils/int"
 import { useSearch } from "wouter"
 import { useAlert, useConfirm } from "../components/dialog"
-import Modal from "react-modal"
 import { MarkdownEditor } from "../components/markdown_editor"
 import { Waiting } from "../components/loading"
 import { MomentItem } from "../components/moment_item"
@@ -33,9 +34,10 @@ export function MomentsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingMoment, setEditingMoment] = useState<Moment | null>(null)
     const query = new URLSearchParams(useSearch());
-    const ref = useRef(false)
+    const ref = useRef("")
     const { t } = useTranslation()
-    const { profile } = useContext(ProfileContext);
+    const siteConfig = useSiteConfig();
+    const profile = useContext(ProfileContext);
     const { showAlert, AlertUI } = useAlert()
     const { showConfirm, ConfirmUI } = useConfirm()
     
@@ -43,7 +45,7 @@ export function MomentsPage() {
     const [hasNextPage, setHasNextPage] = useState(false)
     const [loadingMore, setLoadingMore] = useState(false)
     
-    const limit = tryInt(10, query.get("limit"), process.env.PAGE_SIZE)
+    const limit = tryInt(siteConfig.pageSize, query.get("limit"))
     
     function fetchMoments(page = 1, append = false) {
         if (loadingMore) return
@@ -55,21 +57,19 @@ export function MomentsPage() {
             setLoadingMore(true)
         }
         
-        client.moments.index.get({
-            query: {
-                page: page,
-                limit: limit
-            },
-            headers: headersWithAuth()
+        client.moments.list({
+            page: page,
+            limit: limit
         }).then(({ data }) => {
-            if (data && typeof data !== 'string') {
-                setLength(data.size)
+            if (data) {
+                const momentData = Array.isArray(data.data) ? data.data : [];
+                setLength(momentData.length)
                 setHasNextPage(data.hasNext)
                 
                 if (append) {
-                    setMoments(prev => [...prev, ...data.data])
+                    setMoments(prev => [...prev, ...momentData] as any)
                 } else {
-                    setMoments(data.data)
+                    setMoments(momentData as any)
                 }
                 
                 setCurrentPage(page)
@@ -95,31 +95,31 @@ export function MomentsPage() {
         setLoading(true)
         
         if (editingMoment) {
-            client.moments({ id: editingMoment.id }).post(
-                { content },
-                { headers: headersWithAuth() }
-            ).then(() => {
-                setContent("")
-                setEditingMoment(null)
-                setIsModalOpen(false)
-                fetchMoments(1, false)
-                showAlert(t('update.success'))
-            }).catch(error => {
-                showAlert(t('update.failed$message', { message: error.message }))
+            client.moments.update(editingMoment.id, { content })
+            .then(({ error }) => {
+                if (error) {
+                    showAlert(t('update.failed$message', { message: error.value }))
+                } else {
+                    setContent("")
+                    setEditingMoment(null)
+                    setIsModalOpen(false)
+                    fetchMoments(1, false)
+                    showAlert(t('update.success'))
+                }
             }).finally(() => {
                 setLoading(false)
             })
         } else {
-            client.moments.index.post(
-                { content },
-                { headers: headersWithAuth() }
-            ).then(() => {
-                setContent("")
-                setIsModalOpen(false)
-                fetchMoments(1, false)
-                showAlert(t('publish.success'))
-            }).catch(error => {
-                showAlert(t('publish.failed$message', { message: error.message }))
+            client.moments.create({ content })
+            .then(({ error }) => {
+                if (error) {
+                    showAlert(t('publish.failed$message', { message: error.value }))
+                } else {
+                    setContent("")
+                    setIsModalOpen(false)
+                    fetchMoments(1, false)
+                    showAlert(t('publish.success'))
+                }
             }).finally(() => {
                 setLoading(false)
             })
@@ -137,13 +137,13 @@ export function MomentsPage() {
             t("delete.title"),
             t("delete.confirm"),
             () => {
-                client.moments({ id: id }).delete({}, {
-                    headers: headersWithAuth()
-                }).then(() => {
-                    fetchMoments(1, false)
-                    showAlert(t('delete.success'))
-                }).catch(error => {
-                    showAlert(t('delete.failed$message', { message: error.message }))
+                client.moments.delete(id).then(({ error }) => {
+                    if (error) {
+                        showAlert(t('delete.failed$message', { message: error.value }))
+                    } else {
+                        fetchMoments(1, false)
+                        showAlert(t('delete.success'))
+                    }
                 })
             }
         )
@@ -156,18 +156,19 @@ export function MomentsPage() {
     }
     
     useEffect(() => {
-        if (ref.current) return
+        const key = `${limit}`
+        if (ref.current === key) return
         fetchMoments(1, false)
-        ref.current = true
-    }, [])
+        ref.current = key
+    }, [limit])
     
     return (
         <>
             <Helmet>
-                <title>{`${t('moments.title')} - ${process.env.NAME}`}</title>
+                <title>{`${t('moments.title')} - ${siteConfig.name}`}</title>
                 <meta property="og:site_name" content={siteName} />
                 <meta property="og:title" content={t('moments.title')} />
-                <meta property="og:image" content={process.env.AVATAR} />
+                <meta property="og:image" content={siteConfig.avatar} />
                 <meta property="og:type" content="article" />
                 <meta property="og:url" content={document.URL} />
             </Helmet>
@@ -225,36 +226,15 @@ export function MomentsPage() {
                 </main>
             </Waiting>
             
-            <Modal 
+            <Modal
                 isOpen={isModalOpen}
                 onRequestClose={() => setIsModalOpen(false)}
-                style={{
-                    content: {
-                        top: '50%',
-                        left: '50%',
-                        right: 'auto',
-                        bottom: 'auto',
-                        marginRight: '-50%',
-                        transform: 'translate(-50%, -50%)',
-                        padding: '0',
-                        border: 'none',
-                        borderRadius: '16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        background: 'transparent',
-                        maxWidth: '90%',
-                        width: '800px'
-                    },
-                    overlay: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                        zIndex: 1000
-                    }
-                }}
+                contentLabel={editingMoment ? t('moments.edit') : t('moments.publish')}
+                size="lg"
+                panelClassName="p-5 sm:p-6"
             >
-                <div className="w-full bg-w p-4 rounded-2xl shadow-xl">
-                    <h2 className="text-2xl font-bold mb-4 t-primary">
+                <div className="w-full">
+                    <h2 className="mb-4 text-xl font-bold tracking-[-0.02em] t-primary">
                         {editingMoment ? t('moments.edit') : t('moments.publish')}
                     </h2>
                     
@@ -269,7 +249,7 @@ export function MomentsPage() {
                     <div className="flex justify-end mt-4 space-x-2">
                         <button
                             onClick={() => setIsModalOpen(false)}
-                            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-black dark:text-white rounded-lg"
+                            className="rounded-xl bg-secondary px-4 py-2 t-primary bg-button"
                         >
                             {t('cancel')}
                         </button>

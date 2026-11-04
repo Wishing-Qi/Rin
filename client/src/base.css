@@ -3,6 +3,10 @@
 @tailwind utilities;
 @layer base {
     :root {
+      --theme-rgb: 141 209 210;
+      --theme-hover-rgb: 118 192 193;
+      --theme-active-rgb: 91 169 170;
+      --rin-canvas-rgb: 244 253 253;
       --hero-height-mobile: 10rem;
       --hero-height-desktop: 18rem;
       --hero-surface-top: rgba(141, 209, 210, 0.3);
@@ -13,44 +17,14 @@
 
     [data-color-mode="dark"],
     .dark {
+      --rin-canvas-rgb: 16 40 40;
+      --rin-surface-rgb: 31 49 50;
       --hero-surface-top: rgba(16, 40, 40, 0.55);
       --hero-surface-bottom: rgba(16, 40, 40, 0);
       --hero-overlay-top: rgba(0, 0, 0, 0.75);
       --hero-overlay-bottom: rgba(16, 40, 40, 0);
     }
 
-    .bg-w {
-      @apply bg-white dark:bg-dark;
-    }
-  
-    .bg-secondary {
-      @apply bg-neutral-100 dark:bg-neutral-700;
-    }
-  
-    .bg-button {
-      @apply hover:bg-neutral-200 dark:hover:bg-neutral-600 active:bg-neutral-300 dark:active:bg-neutral-500;
-    }
-
-    .bg-hover {
-      @apply hover:bg-neutral-200 dark:hover:bg-neutral-600;
-    }
-  
-    .shadow-light {
-      @apply shadow-neutral-200/30 dark:shadow-black/10;
-    }
-  
-    .shadow-deep {
-      @apply shadow-neutral-200/70 dark:shadow-black/30;
-    }
-  
-    .t-primary {
-      @apply text-black dark:text-white;
-    }
-  
-    .t-secondary {
-      @apply text-neutral-500 dark:text-neutral-200;
-    }
-  
     .wauto {
       @apply w-full md:w-11/12 lg:w-10/12 xl:w-8/12 2xl:w-6/12 mx-auto duration-300;
     }
@@ -78,7 +52,7 @@
     }
 
     .hero-wrap::before {
-       content: "";
+      content: "";
       position: absolute;
       inset: 0;
       background: linear-gradient(
@@ -90,7 +64,6 @@
     }
 
     .hero-banner {
-      /* background-image set inline in JSX so we only control sizing/position here */
       position: absolute;
       inset: 0;
       background-position: top center;
@@ -106,17 +79,43 @@
     .hero-overlay {
       position: absolute;
       inset: 0;
-      /* fade to page background at bottom */
       background: linear-gradient(to bottom, var(--hero-overlay-top), var(--hero-overlay-bottom));
       pointer-events: none;
       z-index: 2;
     }
 
-    /* Dark mode overlay adjustment */
     [data-color-mode="dark"] .hero-overlay,
     .dark .hero-overlay {
-      background: linear-gradient(to bottom, rgba(0,0,0,0.75), rgba(16,40,40,0));
+      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), rgba(16, 40, 40, 0));
     }
 
-    /* hero-spacer removed; header now uses fixed height offset */
-  }
+    .scrollbar-none {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    .scrollbar-none::-webkit-scrollbar {
+      display: none;
+    }
+
+    input[type="color"].color-input-reset {
+      appearance: none;
+      -webkit-appearance: none;
+      border: none;
+      background: transparent;
+    }
+
+    input[type="color"].color-input-reset::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    input[type="color"].color-input-reset::-webkit-color-swatch {
+      border: none;
+      border-radius: 9999px;
+    }
+
+    input[type="color"].color-input-reset::-moz-color-swatch {
+      border: none;
+      border-radius: 9999px;
+    }
+}

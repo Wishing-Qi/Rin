@@ -3,14 +3,15 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
+    "../packages/ui/src/**/*.{js,ts,jsx,tsx}",
   ],
   darkMode: ['selector','[data-color-mode="dark"]'],
   theme: {
     extend: {
       colors: {
-        'theme': '#8dd1d2',           // 原色 +10% 明度
-        'theme-hover': '#76c0c1',     // +5% 明度
-        'theme-active': '#5ba9aa',    // -10% 明度
+        'theme': 'rgb(var(--theme-rgb) / <alpha-value>)',
+        'theme-hover': 'rgb(var(--theme-hover-rgb) / <alpha-value>)',
+        'theme-active': 'rgb(var(--theme-active-rgb) / <alpha-value>)',
         'background': {
           light: '#f4fdfd',           // 极浅薄荷
           dark: '#102828',            // 深墨绿
@@ -23,4 +24,3 @@ export default {
     require('@tailwindcss/typography'),
   ],
 }
-

@@ -1,4 +1,5 @@
 import "katex/dist/katex.min.css";
+import mermaid from "mermaid";
 import React, { cloneElement, isValidElement, useEffect, useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -12,13 +13,52 @@ import gfm from "remark-gfm";
 import remarkMermaid from "../remark/remarkMermaid";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
+import remarkBreaks from "remark-breaks";
 import Lightbox, { SlideImage } from "yet-another-react-lightbox";
 import Counter from "yet-another-react-lightbox/plugins/counter";
 import Download from "yet-another-react-lightbox/plugins/download";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
+import { drawBlurhashToCanvas } from "../utils/blurhash";
 import { useColorMode } from "../utils/darkModeUtils";
+import { parseImageUrlMetadata } from "../utils/image-upload";
+import { useImageLoadState } from "../utils/use-image-load-state";
 
+const MERMAID_LIGHT_VARS = {
+  darkMode: false,
+  background: "#f0fafa",
+  mainBkg: "#d8f3f3",
+  primaryColor: "#d8f3f3",
+  primaryTextColor: "#0d1f1f",
+  primaryBorderColor: "#4a9192",
+  nodeBorder: "#4a9192",
+  lineColor: "#4a9192",
+  secondaryColor: "#e6f7f7",
+  tertiaryColor: "#f0fafa",
+  clusterBkg: "#e6f7f7",
+  clusterBorder: "#4a9192",
+  titleColor: "#0d1f1f",
+  edgeLabelBackground: "#f0fafa",
+  textColor: "#0d1f1f",
+};
+
+const MERMAID_DARK_VARS = {
+  darkMode: true,
+  background: "#1c1c1e",
+  mainBkg: "#243b3c",
+  primaryColor: "#243b3c",
+  primaryTextColor: "#e0e0e0",
+  primaryBorderColor: "#5ba9aa",
+  nodeBorder: "#5ba9aa",
+  lineColor: "#8dd1d2",
+  secondaryColor: "#1f3132",
+  tertiaryColor: "#182627",
+  clusterBkg: "#1f3132",
+  clusterBorder: "#5ba9aa",
+  titleColor: "#e0e0e0",
+  edgeLabelBackground: "#1c1c1e",
+  textColor: "#e0e0e0",
+};
 
 const countNewlinesBeforeNode = (text: string, offset: number) => {
   let newlinesBefore = 0;
@@ -46,6 +86,78 @@ const isMarkdownImageLinkAtEnd = (text: string) => {
   return false;
 };
 
+function MarkdownImage({
+  src,
+  alt,
+  show,
+  rounded,
+  scale,
+  className,
+}: {
+  src?: string;
+  alt?: string;
+  show: (src?: string) => void;
+  rounded: boolean;
+  scale: string;
+  className?: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { src: cleanSrc, blurhash, width, height } = parseImageUrlMetadata(src);
+  const { failed, imageRef, loaded, onError, onLoad } = useImageLoadState(cleanSrc);
+  const roundedClass = rounded ? "rounded-xl" : "";
+  const aspectRatio = width && height ? `${width} / ${height}` : undefined;
+
+  useEffect(() => {
+    if (!blurhash || !canvasRef.current) {
+      return;
+    }
+    try {
+      drawBlurhashToCanvas(canvasRef.current, blurhash);
+    } catch (error) {
+      console.error("Failed to render blurhash", error);
+    }
+  }, [blurhash]);
+
+  return (
+    <span
+      className={`relative inline-block max-w-full overflow-hidden ${roundedClass}`}
+      style={{ zoom: scale, aspectRatio }}
+    >
+      {blurhash && !loaded ? (
+        <canvas
+          ref={canvasRef}
+          aria-hidden="true"
+          className={`absolute inset-0 h-full w-full scale-110 blur-sm ${roundedClass}`}
+        />
+      ) : null}
+      {failed && !blurhash ? (
+        <span
+          aria-label={alt || undefined}
+          role={alt ? "img" : undefined}
+          className={`${rounded ? "flex min-h-32 min-w-48" : "inline-flex h-8 w-8"} items-center justify-center bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500 ${roundedClass}`}
+        >
+          <i className="ri-image-line" aria-hidden="true" />
+        </span>
+      ) : null}
+      <img
+        ref={imageRef}
+        src={cleanSrc}
+        alt={alt}
+        width={width}
+        height={height}
+        onClick={() => {
+          show(cleanSrc);
+        }}
+        onLoad={onLoad}
+        onError={onError}
+        className={`mx-auto max-w-full cursor-zoom-in transition-opacity ${roundedClass} ${className || ""} ${
+          failed ? "hidden" : blurhash && !loaded ? "opacity-0" : "opacity-100"
+        }`}
+      />
+    </span>
+  );
+}
+
 export function Markdown({ content }: { content: string }) {
   const colorMode = useColorMode();
   const [index, setIndex] = React.useState(-1);
@@ -55,15 +167,44 @@ export function Markdown({ content }: { content: string }) {
     slides.current = undefined;
   }, [content]);
 
-
+  useEffect(() => {
+    const isDark = colorMode === "dark";
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: "base",
+      themeVariables: isDark ? MERMAID_DARK_VARS : MERMAID_LIGHT_VARS,
+    });
+    const selector = isDark
+      ? "pre.mermaid_dark:not([data-processed])"
+      : "pre.mermaid_default:not([data-processed])";
+    const nodes = document.querySelectorAll<HTMLElement>(selector);
+    if (nodes.length > 0) {
+      mermaid.run({
+        suppressErrors: true,
+        nodes,
+      });
+    }
+  }, [content, colorMode]);
 
   const Content = useMemo(() => (
     <ReactMarkdown
-      className="toc-content dark:text-neutral-300"
-      remarkPlugins={[gfm, remarkMermaid, remarkMath, remarkAlert]}
+      className="toc-content min-w-0 dark:text-neutral-300 [overflow-wrap:anywhere]"
+      remarkPlugins={[gfm, remarkMermaid, remarkMath, remarkAlert, remarkBreaks]}
       children={content}
       rehypePlugins={[rehypeKatex, rehypeRaw]}
       components={{
+        pre({ children, node, ...props }) {
+          const className = props.className || "";
+          if (className.includes("mermaid_default") || className.includes("mermaid_dark")) {
+            const codeText = String(children ?? "");
+            return (
+              <pre key={`${className}-${codeText}`} {...props}>
+                {children}
+              </pre>
+            );
+          }
+          return <pre {...props}>{children}</pre>;
+        },
         img({ node, src, ...props }) {
           const offset = node!.position!.start.offset!;
           const previousContent = content.slice(0, offset);
@@ -78,14 +219,13 @@ export function Markdown({ content }: { content: string }) {
             rounded: boolean;
             scale: string;
           }) => (
-            <img
+            <MarkdownImage
               src={src}
-              {...props}
-              onClick={() => {
-                show(src)
-              }}
-              className={`mx-auto ${rounded ? "rounded-xl" : ""}`}
-              style={{ zoom: scale }}
+              alt={props.alt}
+              show={show}
+              rounded={rounded}
+              scale={scale}
+              className={props.className}
             />
           );
           if (
@@ -115,7 +255,7 @@ export function Markdown({ content }: { content: string }) {
           const isCodeBlock = curContent.trimStart().startsWith("```");
 
           const codeBlockStyle = {
-            fontFamily: '"Fira Code", monospace',
+            fontFamily: 'ui-monospace, "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
             fontSize: "14px",
             fontVariantLigatures: "normal",
             WebkitFontFeatureSettings: '"liga" 1',
@@ -222,7 +362,7 @@ export function Markdown({ content }: { content: string }) {
         a({ children, ...props }) {
           return (
             <a
-              className="text-[#0686c8] dark:text-[#2590f1] hover:underline"
+              className="break-words text-[#0686c8] hover:underline dark:text-[#2590f1] [overflow-wrap:anywhere]"
               {...props}
             >
               {children}
@@ -233,8 +373,9 @@ export function Markdown({ content }: { content: string }) {
           return (
             <h1
               id={children?.toString()}
-              className="text-3xl font-bold mt-4"
               {...props}
+              className={`${props.className || ""} mt-4 break-words text-3xl font-bold [overflow-wrap:anywhere]`.trim()}
+              style={{ ...props.style, scrollMarginTop: "var(--header-scroll-offset, 7rem)" }}
             >
               {children}
             </h1>
@@ -244,8 +385,9 @@ export function Markdown({ content }: { content: string }) {
           return (
             <h2
               id={children?.toString()}
-              className="text-2xl font-bold mt-4"
               {...props}
+              className={`${props.className || ""} mt-4 break-words text-2xl font-bold [overflow-wrap:anywhere]`.trim()}
+              style={{ ...props.style, scrollMarginTop: "var(--header-scroll-offset, 7rem)" }}
             >
               {children}
             </h2>
@@ -255,8 +397,9 @@ export function Markdown({ content }: { content: string }) {
           return (
             <h3
               id={children?.toString()}
-              className="text-xl font-bold mt-4"
               {...props}
+              className={`${props.className || ""} mt-4 break-words text-xl font-bold [overflow-wrap:anywhere]`.trim()}
+              style={{ ...props.style, scrollMarginTop: "var(--header-scroll-offset, 7rem)" }}
             >
               {children}
             </h3>
@@ -266,8 +409,9 @@ export function Markdown({ content }: { content: string }) {
           return (
             <h4
               id={children?.toString()}
-              className="text-lg font-bold mt-4"
               {...props}
+              className={`${props.className || ""} mt-4 break-words text-lg font-bold [overflow-wrap:anywhere]`.trim()}
+              style={{ ...props.style, scrollMarginTop: "var(--header-scroll-offset, 7rem)" }}
             >
               {children}
             </h4>
@@ -277,8 +421,9 @@ export function Markdown({ content }: { content: string }) {
           return (
             <h5
               id={children?.toString()}
-              className="text-base font-bold mt-4"
               {...props}
+              className={`${props.className || ""} mt-4 break-words text-base font-bold [overflow-wrap:anywhere]`.trim()}
+              style={{ ...props.style, scrollMarginTop: "var(--header-scroll-offset, 7rem)" }}
             >
               {children}
             </h5>
@@ -288,8 +433,9 @@ export function Markdown({ content }: { content: string }) {
           return (
             <h6
               id={children?.toString()}
-              className="text-sm font-bold mt-4"
               {...props}
+              className={`${props.className || ""} mt-4 break-words text-sm font-bold [overflow-wrap:anywhere]`.trim()}
+              style={{ ...props.style, scrollMarginTop: "var(--header-scroll-offset, 7rem)" }}
             >
               {children}
             </h6>
@@ -297,7 +443,7 @@ export function Markdown({ content }: { content: string }) {
         },
         p({ children, node, ...props }) {
           return (
-            <p className="mt-2 py-1" {...props}>
+            <p className="mt-2 break-words py-1 [overflow-wrap:anywhere]" {...props}>
               {children}
             </p>
           );
@@ -305,7 +451,7 @@ export function Markdown({ content }: { content: string }) {
         hr({ children, ...props }) {
           return <hr className="my-4" {...props} />;
         },
-        table: ({ node, ...props }) => <table className="table" {...props} />,
+        table: ({ node, ...props }) => <table className="table block max-w-full overflow-x-auto" {...props} />,
         th: ({ node, ...props }) => (
           <th className="px-4 py-2 border bg-gray-600" {...props} />
         ),
@@ -337,13 +483,27 @@ export function Markdown({ content }: { content: string }) {
           });
           return <section {...props}>{modifiedChildren}</section>;
         },
+        iframe({ node, src, title, ...props }) {
+          return (
+            <div className="my-4 w-full">
+              <iframe
+                {...props}
+                src={src}
+                title={title || "Embedded content"}
+                className="w-full rounded-xl border border-black/10 dark:border-white/10"
+                style={{ minHeight: "400px" }}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+              />
+            </div>
+          );
+        },
         div({ children, node, ...props }) {
           return <div {...props}>{children}</div>;
         },
       }}
-    />), [content])
-
-
+    />), [content, colorMode]);
 
   const show = (src: string | undefined) => {
     let slidesLocal = slides.current;
